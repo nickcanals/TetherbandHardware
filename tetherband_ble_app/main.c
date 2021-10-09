@@ -54,11 +54,22 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <string.h>
+#include <stdio.h>
 #include "custom_services.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
+
+// State of Charge IC Includes
+#include "app_util_platform.h"
+#include "app_error.h"
+#include "nrf_drv_twi.h"
+#include "gauge.h"
+#include "nrf_delay.h"
+//////////////////////////////
+
+// BLE Includes///////////////
 #include "app_timer.h"
 #include "bsp_btn_ble.h"
 #include "nrf_pwr_mgmt.h"
@@ -71,7 +82,10 @@
 #include "ble_advertising.h"
 #include "ble_conn_params.h"
 #include "ble_bas.h"
+/////////////////////////////
 
+
+// DK MAC address is DD:C8:1A:7E:E8:F5
 
 #define APP_BLE_CONN_CFG_TAG                1 // used in advertising init
 #define APP_BLE_OBSERVER_PRIORITY           3
@@ -91,8 +105,8 @@
 #define NEXT_CONN_PARAMS_UPDATE_DELAY       APP_TIMER_TICKS(30000)
 #define MAX_CONN_PARAMS_UPDATE_COUNT        3
 
-// Time in between battery level reads
-#define BATTERY_LEVEL_MEAS_INTERVAL     APP_TIMER_TICKS(120000)
+// Time in between battery level reads (ms)
+#define BATTERY_LEVEL_MEAS_INTERVAL     APP_TIMER_TICKS(1200)
 
 
 NRF_BLE_QWR_DEF(m_qwr); // create queue writer object
@@ -116,6 +130,39 @@ static ble_uuid_t custom_uuids[] = {{IDENTIFY_UUID_SERVICE, BLE_UUID_TYPE_VENDOR
 
 static uint8_t simulate_battery = 100; // for simulating battery service
 
+/*  Repeat of code in main() to print out saved SoC IC config settings. Doesn't return values properly.
+void get_battery_config_settings(uint16_t *capacity, uint16_t *energy, uint16_t *term_voltage){
+    char state_buffer[STATE_SUB_LEN];
+    uint16_t result;
+    
+    unseal_gauge();
+    // Read out all the new values
+    *capacity = gauge_cmd_read(NULL, GET_DESIGN_CAPACITY);
+    
+    result = gauge_read_data_class(NULL, STATE_SUB, state_buffer, STATE_SUB_LEN); // read out the whole state subclass
+    shift_register(state_buffer, STATE_SUB_LEN); // have to shift because values are returned shifted one left
+
+    if(result == -1){
+        NRF_LOG_INFO("reading from state data class failed");
+        NRF_LOG_FLUSH();
+    }
+
+    uint8_t copy_array[2];
+    copy_array[0] = state_buffer[DESIGN_EGY_OFFSET + 1];
+    copy_array[1] = state_buffer[DESIGN_EGY_OFFSET];
+    NRF_LOG_INFO("COPY ARRAY CONTENTS BEFORE FIRST MEMCPY: %d, %d", copy_array[0], copy_array[1]);
+    NRF_LOG_FLUSH();
+    memcpy(&energy, copy_array,  sizeof(energy));
+    NRF_LOG_INFO("ENERGY CONTENTS AFTER FIRST MEMCPY: %d", energy);
+    NRF_LOG_FLUSH();
+    
+    copy_array[0] = state_buffer[TERM_VOLT_OFFSET + 1];
+    copy_array[1] = state_buffer[TERM_VOLT_OFFSET];
+    memcpy(&term_voltage, copy_array,  sizeof(term_voltage));
+    
+    gauge_control(NULL, SEAL, 0);
+    return;
+}*/
 
 // error handler for queue writer used in services
 static void nrf_qwr_error_handler(uint32_t nrf_error)
@@ -173,6 +220,7 @@ static void battery_level_meas_timeout_handler(void * p_context)
     if(simulate_battery != 0){
         simulate_battery -= 1;
     }
+    NRF_LOG_INFO("SIMULATE BATTERY LEVEL = %d", simulate_battery);
     
     uint8_t percentage_batt_lvl = simulate_battery;
     ret_code_t err_code;
@@ -190,21 +238,21 @@ static void on_bas_evt(ble_bas_t * p_bas, ble_bas_evt_t * p_evt)
         case BLE_BAS_EVT_NOTIFICATION_ENABLED:
             // Start battery timer
             NRF_LOG_INFO("Notification Enabled event received");
-            NRF_LOG_FLUSH();
+           // NRF_LOG_FLUSH();
             err_code = app_timer_start(m_battery_timer_id, BATTERY_LEVEL_MEAS_INTERVAL, NULL);
             APP_ERROR_CHECK(err_code);
             break; // BLE_BAS_EVT_NOTIFICATION_ENABLED
 
         case BLE_BAS_EVT_NOTIFICATION_DISABLED:
             NRF_LOG_INFO("Notification Disabled event received");
-            NRF_LOG_FLUSH();
+          //  NRF_LOG_FLUSH();
             err_code = app_timer_stop(m_battery_timer_id);
             APP_ERROR_CHECK(err_code);
             break; // BLE_BAS_EVT_NOTIFICATION_DISABLED
 
         default:
             NRF_LOG_INFO("BLE BAS event received but does not match cases");
-            NRF_LOG_FLUSH();
+           // NRF_LOG_FLUSH();
             // No implementation needed.
             break;
     }
@@ -248,8 +296,6 @@ static void services_init(void)
 
     err_code = nrf_ble_qwr_init(&m_qwr, &qwr_init);
     APP_ERROR_CHECK(err_code);
-
-    
 
     bas_init(); // setting up all bas init objects done in this function
 }
@@ -462,26 +508,87 @@ static void advertising_start(void)
  */
 int main(void)
 {
-    // System init
+    // SoC IC variables ////////////
+    ret_code_t err_code;
+    uint8_t address;
+    uint8_t sample_data = 0x00;
+    uint16_t config_capacity;
+    uint16_t config_energy; 
+    uint16_t config_term_voltage;
+    uint16_t battery_percent;
+    ////////////////////////////////
+
+
+    // System Init ////////////////
     log_init();
     timers_init();
     leds_init();
     power_management_init();
+    ///////////////////////////////
 
-    // Bluetooth init
+    // BLE Init ///////////////////
     ble_stack_init();
     gap_params_init();
     gatt_init();
     services_init();
     advertising_init();
     conn_params_init();
+    ///////////////////////////////
+    
+    // SoC IC Init and Config setup /////////////////////////////////////////////////////
+    twi_init(); 
+
+    NRF_LOG_INFO("All Init functions completed. Application Started.");
+    NRF_LOG_INFO("Setting battery config parameters.");
+    NRF_LOG_FLUSH();
+   
+    set_starting_config();
+
+    NRF_LOG_INFO("Completed parameter update process.");
+    NRF_LOG_INFO("Reading the new saved values.");
+    NRF_LOG_FLUSH();
+    
+    // This function performs the code below until end of SoC init and config setup.
+    // It doesn't pass back the values properly right now.
+    // get_battery_config_settings(&config_capacity, &config_energy, &config_term_voltage);
+    char state_buffer[STATE_SUB_LEN];
+    uint16_t result;
+    
+    unseal_gauge();
+    // Read out all the new values
+    config_capacity = gauge_cmd_read(NULL, GET_DESIGN_CAPACITY);
+    result = gauge_read_data_class(NULL, STATE_SUB, state_buffer, STATE_SUB_LEN);
+    shift_register(state_buffer, STATE_SUB_LEN); // have to shift because values are returned shifted one left
+
+    if(result == -1){
+        NRF_LOG_INFO("reading from state data class failed");
+        NRF_LOG_FLUSH();
+    }
+
+    uint8_t copy_array[2];
+    copy_array[0] = state_buffer[DESIGN_EGY_OFFSET + 1];
+    copy_array[1] = state_buffer[DESIGN_EGY_OFFSET];
+    memcpy(&config_energy, copy_array,  sizeof(config_energy));
+    
+    copy_array[0] = state_buffer[TERM_VOLT_OFFSET + 1];
+    copy_array[1] = state_buffer[TERM_VOLT_OFFSET];
+    memcpy(&config_term_voltage, copy_array,  sizeof(config_term_voltage));
+    
+    gauge_control(NULL, SEAL, 0);
+    // Done reading out the new values
+
+    NRF_LOG_INFO("New config parameters:\nDesign Capacity: %d mAh\nDesign Energy: %d\nTerminate Voltage: %d mV", 
+                  config_capacity, config_energy, config_term_voltage);
+    NRF_LOG_FLUSH();
+
+    battery_percent = gauge_cmd_read(NULL, GET_BATT_PCT);
+    NRF_LOG_INFO("Battery percent successfully read at %d%", battery_percent);
+    NRF_LOG_FLUSH();
+    ///// End SoC Init and Config setup ////////////////////////////////////////////////
 
     NRF_LOG_INFO("BLE Base Application started!");
 
     advertising_start();
-
-    // Not sure if you should put the NFC initialization code before the Bluetooth init stuff or after,
-    // I would try after it first and see if everything still works.
 
     // Enter main loop.
     for(;;)
