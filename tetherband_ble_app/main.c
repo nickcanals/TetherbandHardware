@@ -92,6 +92,81 @@
 #include "ble_bas.h"
 /////////////////////////////
 
+//Local Alerts Includes///////////////
+#include "nrf_drv_pwm.h"
+#include "bsp.h"
+#include "nrf_drv_clock.h"
+#include "nrf_gpio.h"
+
+//Touch Sensor //////////////////////
+#include "nrf_csense.h"
+#include "nrf_drv_timer.h"
+
+// PWM sequence value parameters
+#define m_top 1000
+#define m_step 100
+#define test_1 10
+#define SPEAKER_OUT 12
+
+//Touch Sensor Parameters ///////////
+/* Time between RTC interrupts. */
+#define APP_TIMER_TICKS_TIMEOUT APP_TIMER_TICKS(50)
+
+/* Scale range. */
+#define RANGE                   50
+
+/* Analog inputs. */
+#define AIN1                    1
+#define AIN2                    2
+#define AIN3                    3
+#define AIN4                    4
+#define AIN7                    7
+
+/* Definition which pads use which analog inputs. */
+#define BUTTON                  AIN7
+#define PAD1                    AIN4
+#define PAD4                    AIN4
+#ifdef NRF51
+#define PAD2                    AIN2
+#define PAD3                    AIN3
+#else
+#define PAD2                    AIN1
+#define PAD3                    AIN2
+#endif
+#define LED_BLUE     17
+#define LED_YELLOW   14
+#define MOTOR_OUT     7
+#define SPEAKER_OUT  12
+#define LED_RED      16
+#define LED_GREEN    18
+#define LED_ORANGE   15
+#define LED_PURPLE   13
+
+//* Threshold values for pads and button
+#define THRESHOLD_PAD_1         800
+#define THRESHOLD_PAD_2         800
+#define THRESHOLD_PAD_3         800
+#define THRESHOLD_PAD_4         800
+#define THRESHOLD_BUTTON        800
+
+/*lint -e19 -save */
+NRF_CSENSE_BUTTON_DEF(m_button, (BUTTON, THRESHOLD_BUTTON));
+NRF_CSENSE_SLIDER_4_DEF(m_slider,
+                        RANGE,
+                        (PAD1, THRESHOLD_PAD_1),
+                        (PAD2, THRESHOLD_PAD_2),
+                        (PAD3, THRESHOLD_PAD_3),
+                        (PAD4, THRESHOLD_PAD_4));
+/*lint -restore*/
+static nrfx_pwm_t m_pwm0 =NRFX_PWM_INSTANCE(0);
+uint16_t step = m_top / m_step;
+static nrf_pwm_values_common_t sequence_values[m_step * 4];//array to play a sequence
+uint16_t value=0;
+void bracelet_removed_flash();
+void repeated_timer_handler();
+uint8_t bracelet_removed = 0;
+uint8_t bracelet_initial = 2;
+
 
 // DK MAC address is DD:C8:1A:7E:E8:F5
 // BLE Defines //////////////////////////////////////////////////////////////
@@ -616,6 +691,175 @@ static void advertising_start(void)
     APP_ERROR_CHECK(err_code);
 }
 
+///// Local Alert Handler ////////////////////////////////////////////////////////
+static void pwm_common_init(void)//assigning array values
+{
+
+   for(int i = 0; i<m_step; i++)
+   {
+     value += step; //1st step:0 +100=100...2nd:100+100=200...so on
+     sequence_values[i]=value;
+     sequence_values[m_step+i] = m_top - value; //sequence_values[100+1] = 1,000 -100=990...so on
+   }
+
+   nrfx_pwm_config_t const config0=
+   {
+    .output_pins=
+    {
+       //BSP_LED_0 | NRFX_PWM_PIN_INVERTED,
+       SPEAKER_OUT,
+       NRFX_PWM_PIN_NOT_USED,
+       NRFX_PWM_PIN_NOT_USED,
+     },
+     .irq_priority= APP_IRQ_PRIORITY_LOWEST,
+     .base_clock = NRF_PWM_CLK_2MHz,
+     .count_mode = NRF_PWM_MODE_UP,
+     .top_value = m_top,
+     .load_mode = NRF_PWM_LOAD_COMMON,
+     .step_mode = NRF_PWM_STEP_AUTO
+      };
+
+      APP_ERROR_CHECK(nrfx_pwm_init(&m_pwm0, &config0,NULL));
+}
+
+static void pwm_play(void)
+{
+ nrf_pwm_sequence_t const seq0=
+ {
+   .values.p_common = sequence_values,
+   .length          = NRF_PWM_VALUES_LENGTH(sequence_values),
+   .repeats         = 0,
+   .end_delay       = 0
+
+  };
+
+ (void)nrfx_pwm_simple_playback(&m_pwm0, &seq0, 1, NRFX_PWM_FLAG_LOOP);
+
+ }
+
+ ///// Touch Sensor Handler ////////////////////////////////////////////////
+  /**
+ * @brief Function for starting the internal LFCLK XTAL oscillator.
+ *
+ * Note that when using a SoftDevice, LFCLK is always on.
+ *
+ * @return Values returned by @ref nrf_drv_clock_init.
+ */
+static ret_code_t clock_config(void)
+{
+    ret_code_t err_code;
+    err_code = nrf_drv_clock_init();
+    if (err_code != NRF_SUCCESS)
+    {
+        return err_code;
+    }
+    nrf_drv_clock_lfclk_request(NULL);
+    return NRF_SUCCESS;
+}
+
+/**
+ * @brief Function for handling slider interrupts.
+ *
+ * @param[in] step                          Detected step.
+ */
+//static void slider_handler(uint16_t step)
+//{
+   // static uint16_t slider_val;
+   // if (slider_val != step)
+    //{
+        
+       // NRF_LOG_INFO("Bracelt is on");
+      //  slider_val = step;
+  //  }
+//}
+
+/**
+ * @brief Event handler for Capacitive Sensor High module.
+ *
+ * @param [in] p_evt_type                    Pointer to event data structure.
+ */
+void nrf_csense_handler(nrf_csense_evt_t * p_evt)
+{
+       
+        switch (p_evt->nrf_csense_evt_type)
+    {
+        case NRF_CSENSE_BTN_EVT_PRESSED:
+        bracelet_removed = 0;
+        bracelet_initial=0;
+        nrf_gpio_pin_set(LED_BLUE);
+        NRF_LOG_INFO("Bracelet is on");
+        break;
+          
+        case NRF_CSENSE_BTN_EVT_RELEASED:
+        bracelet_removed = 1;
+        //repeated_timer_handler();
+        bracelet_removed_flash();
+        break;
+                      
+        /*case NRF_CSENSE_SLIDER_EVT_PRESSED:
+        nrf_gpio_pin_set(LED_BLUE);
+        break;
+        case NRF_CSENSE_SLIDER_EVT_RELEASED:
+        break;
+        case NRF_CSENSE_SLIDER_EVT_DRAGGED:
+        if ((p_evt->p_instance == (&m_slider)) && (p_evt->params.slider.step != UINT16_MAX))
+        {
+        /*lint -e611 -save */
+        // ((void(*)(uint16_t, uint8_t))p_evt->p_instance->p_context)(p_evt->params.slider.step, 2);
+        /*lint -restore*/
+        // }
+        // break;
+        default:
+        NRF_LOG_WARNING("Unknown event.");
+        break;
+    }
+}
+
+/**
+ * @brief Function for starting Capacitive Sensor High module.
+ *
+ * Function enables one slider and one button.
+ */
+static void csense_start(void)
+{
+    ret_code_t err_code;
+    static uint16_t touched_counter = 0;
+    err_code = nrf_csense_init(nrf_csense_handler, APP_TIMER_TICKS_TIMEOUT);
+    APP_ERROR_CHECK(err_code);
+    nrf_csense_instance_context_set(&m_button, (void*)&touched_counter);
+    //nrf_csense_instance_context_set(&m_slider, (void*)slider_handler);
+    err_code = nrf_csense_add(&m_button);
+    APP_ERROR_CHECK(err_code);
+    //err_code = nrf_csense_add(&m_slider);
+   // APP_ERROR_CHECK(err_code);
+}
+
+void bracelet_removed_flash()
+{
+   if(bracelet_removed==1)
+   {
+     pwm_play();
+     nrf_gpio_pin_set(LED_BLUE);
+     nrf_gpio_pin_set(MOTOR_OUT);
+     nrf_delay_ms(250);
+     nrf_gpio_pin_clear(LED_BLUE);
+     nrf_gpio_pin_clear(MOTOR_OUT);
+     nrf_delay_ms(250);
+    // NRF_LOG_INFO("Bracelet is off");
+   }
+     else
+     {
+      if (bracelet_initial!=2)
+     {
+        nrf_gpio_pin_set(LED_BLUE);
+        nrf_gpio_pin_clear(SPEAKER_OUT);
+        return;
+     }
+     else
+     return;
+}
+}
+
 
 /**@brief Function for application main entry.
  */
@@ -754,8 +998,68 @@ int main(void)
     {
         idle_state_handle();
     }
-}
+    ///// Local Alert Config and Setup ////////////////////////////////////////////////
+    pwm_common_init();
+    log_init();
+    bsp_board_init(BSP_INIT_LEDS);
+    pwm_play();
+    NRF_LOG_INFO("PWM application started");
+    nrf_gpio_cfg_output(LED_BLUE); //configures pin as output
+    nrf_gpio_cfg_output(MOTOR_OUT);
+    nrf_gpio_cfg_output(LED_YELLOW);
+    nrf_gpio_cfg_output(LED_RED);
+    nrf_gpio_cfg_output(LED_GREEN);
+    nrf_gpio_cfg_output(LED_ORANGE);
+    nrf_gpio_cfg_output(LED_PURPLE);
+    ///// End Local Alert Config and Setup ////////////////////////////////////////////
 
+    ///// Touch Sensor Config and Setup ///////////////////////////////////////////////
+    //timer_init();
+    nrf_gpio_cfg_output(LED_BLUE);
+    err_code = NRF_LOG_INIT(NULL);
+    APP_ERROR_CHECK(err_code);
+    NRF_LOG_DEFAULT_BACKENDS_INIT();
+    err_code = app_timer_init();
+    APP_ERROR_CHECK(err_code);
+    err_code = clock_config();
+    APP_ERROR_CHECK(err_code);
+    NRF_LOG_INFO("Capacitive sensing library example started.");
+    csense_start();
+    while (1)
+    {
+        bracelet_removed_flash();
+        __WFI();
+        NRF_LOG_FLUSH();
+    }
+    while(1)
+   {
+    nrf_gpio_pin_set(LED_BLUE);// setting logic 1 on pin 13
+    nrf_gpio_pin_set(LED_YELLOW);
+    nrf_gpio_pin_set(LED_RED);
+    nrf_gpio_pin_set(LED_GREEN);
+    nrf_gpio_pin_set(LED_ORANGE);
+    nrf_gpio_pin_set(LED_PURPLE);
+    nrf_gpio_pin_set(MOTOR_OUT);
+    nrf_delay_ms(500);
+    nrf_gpio_pin_clear(LED_BLUE); // setting logic 0 on pin 13
+    nrf_gpio_pin_clear(LED_YELLOW);
+    nrf_gpio_pin_clear(LED_RED);
+    nrf_gpio_pin_clear(LED_GREEN);
+    nrf_gpio_pin_clear(LED_ORANGE);
+    nrf_gpio_pin_clear(LED_PURPLE);
+    nrf_gpio_pin_clear(MOTOR_OUT);
+    nrf_delay_ms(500);
+    nrf_gpio_pin_set(LED_BLUE);// setting logic 1 on pin 13
+    nrf_gpio_pin_set(LED_YELLOW);
+    nrf_gpio_pin_set(LED_RED);
+    nrf_gpio_pin_set(LED_GREEN);
+    nrf_gpio_pin_set(LED_ORANGE);
+    nrf_gpio_pin_set(LED_PURPLE);
+    nrf_gpio_pin_set(MOTOR_OUT);
+    
+   }
+    ///// End Touch Sensor Config and Setup ///////////////////////////////////////////
+}
 
 /**
  * @}

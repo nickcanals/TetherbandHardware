@@ -2761,7 +2761,7 @@
 // <e> NRFX_PWM_ENABLED - nrfx_pwm - PWM peripheral driver
 //==========================================================
 #ifndef NRFX_PWM_ENABLED
-#define NRFX_PWM_ENABLED 0
+#define NRFX_PWM_ENABLED 1
 #endif
 // <q> NRFX_PWM0_ENABLED  - Enable PWM0 instance
  
@@ -4950,21 +4950,21 @@
  
 
 #ifndef PWM0_ENABLED
-#define PWM0_ENABLED 0
+#define PWM0_ENABLED 1
 #endif
 
 // <q> PWM1_ENABLED  - Enable PWM1 instance
  
 
 #ifndef PWM1_ENABLED
-#define PWM1_ENABLED 0
+#define PWM1_ENABLED 1
 #endif
 
 // <q> PWM2_ENABLED  - Enable PWM2 instance
  
 
 #ifndef PWM2_ENABLED
-#define PWM2_ENABLED 0
+#define PWM2_ENABLED 1
 #endif
 
 // <e> PWM_NRF52_ANOMALY_109_WORKAROUND_ENABLED - Enables nRF52 Anomaly 109 workaround for PWM.
