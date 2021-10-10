@@ -60,6 +60,7 @@ Output/Release/Obj/ble_app_template_pca10040_s132/app_timer2.o: \
  ../../../../../../components/softdevice/s132/headers/nrf_sd_def.h \
  ../../../../../../components/softdevice/s132/headers/nrf_soc.h \
  ../../../../../../modules/nrfx/drivers/nrfx_errors.h \
+ ../../../../../../components/libraries/scheduler/app_scheduler.h \
  ../../../../../../components/libraries/log/nrf_log.h \
  ../../../../../../components/libraries/util/sdk_common.h \
  C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/string.h \

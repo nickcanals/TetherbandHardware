@@ -75,7 +75,9 @@ Output/Release/Obj/ble_app_template_pca10040_s132/main.o: \
  ../../../../../../components/libraries/util/app_error_weak.h \
  ../../../../../../components/libraries/log/nrf_log_default_backends.h \
  ../../../../../../components/libraries/util/app_error.h \
- ../../../../../../integration/nrfx/legacy/nrf_drv_twi.h \
+ ../../../../../../components/libraries/scheduler/app_scheduler.h \
+ ../../../../../../components/boards/boards.h \
+ ../../../../../../modules/nrfx/hal/nrf_gpio.h \
  ../../../../../../modules/nrfx/nrfx.h \
  ../../../../../../integration/nrfx/nrfx_config.h \
  ../../../../../../modules/nrfx/drivers/nrfx_common.h \
@@ -91,6 +93,12 @@ Output/Release/Obj/ble_app_template_pca10040_s132/main.o: \
  ../../../../../../components/softdevice/s132/headers/nrf_sd_def.h \
  ../../../../../../components/softdevice/s132/headers/nrf_soc.h \
  ../../../../../../modules/nrfx/drivers/nrfx_errors.h \
+ ../../../../../../components/boards/pca10040.h \
+ ../../../../../../components/nfc/t4t_lib/nfc_t4t_lib.h \
+ C\:\Users\erich\Nordic\nRF5_SDK_17.0.2_d674dde\nRF5_SDK_17.0.2_d674dde\examples\my_projects\ble_app_template\ndef_file_m.h \
+ ../../../../../../components/nfc/ndef/generic/message/nfc_ndef_msg.h \
+ ../../../../../../components/nfc/ndef/generic/record/nfc_ndef_record.h \
+ ../../../../../../integration/nrfx/legacy/nrf_drv_twi.h \
  ../../../../../../modules/nrfx/drivers/include/nrfx_twim.h \
  ../../../../../../modules/nrfx/drivers/include/nrfx_twi_twim.h \
  ../../../../../../modules/nrfx/hal/nrf_twim.h \
@@ -102,9 +110,6 @@ Output/Release/Obj/ble_app_template_pca10040_s132/main.o: \
  ../../../../../../components/libraries/sortlist/nrf_sortlist.h \
  ../../../../../../components/libraries/bsp/bsp_btn_ble.h \
  ../../../../../../components/libraries/bsp/bsp.h \
- ../../../../../../components/boards/boards.h \
- ../../../../../../modules/nrfx/hal/nrf_gpio.h \
- ../../../../../../components/boards/pca10040.h \
  ../../../../../../components/libraries/button/app_button.h \
  ../../../../../../components/libraries/pwr_mgmt/nrf_pwr_mgmt.h \
  ../../../../../../components/softdevice/common/nrf_sdh.h \

@@ -55,4 +55,5 @@ Output/Release/Obj/ble_app_template_pca10040_s132/nrf_sdh.o: \
  ../../../../../../components/libraries/log/src/nrf_log_internal.h \
  ../../../../../../components/libraries/log/nrf_log_instance.h \
  ../../../../../../components/libraries/log/nrf_log_types.h \
- ../../../../../../components/libraries/log/nrf_log_types.h
+ ../../../../../../components/libraries/log/nrf_log_types.h \
+ ../../../../../../components/libraries/scheduler/app_scheduler.h

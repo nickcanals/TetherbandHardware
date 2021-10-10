@@ -61,9 +61,17 @@
 #include "nrf_log_ctrl.h"
 #include "nrf_log_default_backends.h"
 
+// NFC Includes //////////////
+#include "app_error.h"
+#include "app_scheduler.h"
+#include "boards.h"
+#include "nfc_t4t_lib.h"
+#include "ndef_file_m.h"
+#include "nfc_ndef_msg.h"
+//////////////////////////////
+
 // State of Charge IC Includes
 #include "app_util_platform.h"
-#include "app_error.h"
 #include "nrf_drv_twi.h"
 #include "gauge.h"
 #include "nrf_delay.h"
@@ -86,6 +94,7 @@
 
 
 // DK MAC address is DD:C8:1A:7E:E8:F5
+// BLE Defines //////////////////////////////////////////////////////////////
 
 #define APP_BLE_CONN_CFG_TAG                1 // used in advertising init
 #define APP_BLE_OBSERVER_PRIORITY           3
@@ -107,7 +116,18 @@
 
 // Time in between battery level reads (ms)
 #define BATTERY_LEVEL_MEAS_INTERVAL     APP_TIMER_TICKS(1200)
+// End BLE Defines //////////////////////////////////////////////////////////
 
+
+// App Scheduler Defines and NFC Defines ////////////////////////////////////
+#define BLE_BAS_SCHED_EVENT_DATA_SIZE sizeof(ble_bas_evt_t)
+#define APP_SCHED_MAX_EVENT_SIZE MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE, BLE_BAS_SCHED_EVENT_DATA_SIZE) /**< Maximum size of scheduler events. */
+#define APP_SCHED_QUEUE_SIZE     20                  /**< Maximum number of events in the scheduler queue. */
+#define APP_DEFAULT_BTN          BSP_BOARD_BUTTON_0 /**< Button used to set default NDEF message. */
+// End NFC Defines //////////////////////////////////////////////////////////
+
+
+// Module Instances /////////////////////////////////////////////////////////
 
 NRF_BLE_QWR_DEF(m_qwr); // create queue writer object
 NRF_BLE_GATT_DEF(m_gatt); // create gatt object
@@ -115,20 +135,102 @@ BLE_ADVERTISING_DEF(m_advert); // create advertising object
 BLE_IDENTIFY_DEF(m_identify); // create custom identifying service
 APP_TIMER_DEF(m_battery_timer_id); // setup app timer for battery level reads
 BLE_BAS_DEF(m_bas); // instance of battery level service
+// End Module Instances ////////////////////////////////////////////////////
 
-// connection handle used in ble_evt_handler
-static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID;
+// BLE globals ////////////////////////////////////////////////////////////////////////
 
+static uint16_t m_conn_handle = BLE_CONN_HANDLE_INVALID; // connection handle used in ble_evt_handler
 static ble_uuid_t m_adv_uuids[] = {
                                     {IDENTIFY_UUID_BASE, BLE_UUID_TYPE_VENDOR_BEGIN},
                                     {BLE_UUID_BATTERY_SERVICE, BLE_UUID_TYPE_BLE}
                                   };
-
 // To have UUID be advertised correctly, the object passed in advertising init has to be the 12th and 13th octet. 
 // IDENTIFY_UUID_SERVICE matches the 12th and 13th octet so it can be passed properly.
 static ble_uuid_t custom_uuids[] = {{IDENTIFY_UUID_SERVICE, BLE_UUID_TYPE_VENDOR_BEGIN}};
+// End BLE globals /////////////////////////////////////////////////////////////////////
 
-static uint8_t simulate_battery = 100; // for simulating battery service
+
+// NFC globals ////////////////////////////////////////////////////////////////////////
+
+static uint8_t m_ndef_msg_buf[NDEF_FILE_SIZE];      /**< Buffer for NDEF file. */
+static uint8_t m_ndef_msg_len;                      /**< Length of the NDEF message. */
+// End NFC globals ////////////////////////////////////////////////////////////////////
+
+
+static uint16_t battery_percent; // updated by SoC IC, sent through battery service when notifications enabled.
+static uint16_t simulate_battery = 100;
+
+// NFC Functions ///////////////////////////////////////////////////////////////////////////////////////////////
+
+/**
+ * @brief Function for updating NDEF message in the flash file.
+ */
+static void scheduler_ndef_file_update(void * p_event_data, uint16_t event_size)
+{
+    ret_code_t err_code;
+
+    UNUSED_PARAMETER(p_event_data);
+    UNUSED_PARAMETER(event_size);
+
+    // Update flash file with new NDEF message.
+    err_code = ndef_file_update(m_ndef_msg_buf, m_ndef_msg_len + NLEN_FIELD_SIZE);
+    APP_ERROR_CHECK(err_code);
+
+    NRF_LOG_INFO("NDEF message updated!");
+}
+
+
+/**
+ * @brief Callback function for handling NFC events.
+ */
+static void nfc_callback(void          * context,
+                         nfc_t4t_event_t event,
+                         const uint8_t * data,
+                         size_t          dataLength,
+                         uint32_t        flags)
+{
+    (void)context;
+
+    switch (event)
+    {
+        case NFC_T4T_EVENT_FIELD_ON:
+            bsp_board_led_on(BSP_BOARD_LED_0);
+            NRF_LOG_INFO("EVENT: NFC T4T EVENT FIELD ON TRIGGERED");
+            break;
+
+        case NFC_T4T_EVENT_FIELD_OFF:
+            bsp_board_leds_off();
+            NRF_LOG_INFO("EVENT: NFC_T4T_EVENT_FIELD_OFF TRIGGERED");
+            break;
+
+        case NFC_T4T_EVENT_NDEF_READ:
+            bsp_board_led_on(BSP_BOARD_LED_3);
+            NRF_LOG_INFO("EVENT: NFC_T4T_EVENT_NDEF_READ TRIGGERED");
+            break;
+
+        case NFC_T4T_EVENT_NDEF_UPDATED:
+            NRF_LOG_INFO("EVENT: NFC_T4T_EVENT_NDEF_UPDATED TRIGGERED");
+            if (dataLength > 0)
+            {
+                ret_code_t err_code;
+
+                bsp_board_led_on(BSP_BOARD_LED_1);
+
+                // Schedule update of NDEF message in the flash file.
+                m_ndef_msg_len = dataLength;
+                err_code       = app_sched_event_put(NULL, 0, scheduler_ndef_file_update);
+                APP_ERROR_CHECK(err_code);
+            }
+            break;
+
+        default:
+            break;
+    }
+}
+// End NFC Functions //////////////////////////////////////////////////////////////////////////////////////////
+
+
+// SoC IC Functions ////////////////////////////////////////////////////////////////////////////////////////////
 
 /*  Repeat of code in main() to print out saved SoC IC config settings. Doesn't return values properly.
 void get_battery_config_settings(uint16_t *capacity, uint16_t *energy, uint16_t *term_voltage){
@@ -163,6 +265,10 @@ void get_battery_config_settings(uint16_t *capacity, uint16_t *energy, uint16_t 
     gauge_control(NULL, SEAL, 0);
     return;
 }*/
+
+// End SoC IC Functions //////////////////////////////////////////////////////////////////////////
+
+// BLE Functions ///////////////////////////////////////////////////////////////////////////
 
 // error handler for queue writer used in services
 static void nrf_qwr_error_handler(uint32_t nrf_error)
@@ -212,18 +318,25 @@ static void conn_params_init(void)
     APP_ERROR_CHECK(err_code);
 } 
 
-// runs when the battery measurement timer expires every 3 seconds.
+// runs when the battery measurement timer expires every BATTERY_LEVEL_MEAS_INTERVAL (ms).
 // if client has notifications enabled for this service it will get update of battery level.
 static void battery_level_meas_timeout_handler(void * p_context)
 {
     UNUSED_PARAMETER(p_context);
+    // REMOVE THIS AFTER TESTING WITH SOC IC AND BATTERY CONNECTED 
     if(simulate_battery != 0){
         simulate_battery -= 1;
     }
     NRF_LOG_INFO("SIMULATE BATTERY LEVEL = %d", simulate_battery);
     
     uint8_t percentage_batt_lvl = simulate_battery;
+    
+    /*battery_percent = gauge_cmd_read(NULL, GET_BATT_PCT);
+    NRF_LOG_INFO("Battery percent successfully read at %d%", battery_percent);
+    NRF_LOG_FLUSH();*/
+
     ret_code_t err_code;
+    //err_code = ble_bas_battery_level_update(&m_bas, (uint8_t)battery_percent, BLE_CONN_HANDLE_ALL);
     err_code = ble_bas_battery_level_update(&m_bas, percentage_batt_lvl, BLE_CONN_HANDLE_ALL);
     APP_ERROR_CHECK(err_code);
 }
@@ -238,21 +351,18 @@ static void on_bas_evt(ble_bas_t * p_bas, ble_bas_evt_t * p_evt)
         case BLE_BAS_EVT_NOTIFICATION_ENABLED:
             // Start battery timer
             NRF_LOG_INFO("Notification Enabled event received");
-           // NRF_LOG_FLUSH();
             err_code = app_timer_start(m_battery_timer_id, BATTERY_LEVEL_MEAS_INTERVAL, NULL);
             APP_ERROR_CHECK(err_code);
             break; // BLE_BAS_EVT_NOTIFICATION_ENABLED
 
         case BLE_BAS_EVT_NOTIFICATION_DISABLED:
             NRF_LOG_INFO("Notification Disabled event received");
-          //  NRF_LOG_FLUSH();
             err_code = app_timer_stop(m_battery_timer_id);
             APP_ERROR_CHECK(err_code);
             break; // BLE_BAS_EVT_NOTIFICATION_DISABLED
 
         default:
             NRF_LOG_INFO("BLE BAS event received but does not match cases");
-           // NRF_LOG_FLUSH();
             // No implementation needed.
             break;
     }
@@ -453,6 +563,8 @@ static void ble_stack_init()
     NRF_SDH_BLE_OBSERVER(m_ble_observer, APP_BLE_OBSERVER_PRIORITY, ble_evt_handler, NULL);
 }
 
+// End BLE Functions /////////////////////////////////////////////////////////////////////////////
+
 // Step 4 init power management
 static void power_management_init(void)
 {
@@ -463,6 +575,7 @@ static void power_management_init(void)
 // handler for idle power state
 static void idle_state_handle(void)
 {
+    app_sched_execute();
     if(NRF_LOG_PROCESS() == false)
     {
         nrf_pwr_mgmt_run();
@@ -515,12 +628,11 @@ int main(void)
     uint16_t config_capacity;
     uint16_t config_energy; 
     uint16_t config_term_voltage;
-    uint16_t battery_percent;
     ////////////////////////////////
-
 
     // System Init ////////////////
     log_init();
+    APP_SCHED_INIT(APP_SCHED_MAX_EVENT_SIZE, APP_SCHED_QUEUE_SIZE);
     timers_init();
     leds_init();
     power_management_init();
@@ -536,7 +648,7 @@ int main(void)
     ///////////////////////////////
     
     // SoC IC Init and Config setup /////////////////////////////////////////////////////
-    twi_init(); 
+    /*twi_init(); 
 
     NRF_LOG_INFO("All Init functions completed. Application Started.");
     NRF_LOG_INFO("Setting battery config parameters.");
@@ -583,12 +695,59 @@ int main(void)
 
     battery_percent = gauge_cmd_read(NULL, GET_BATT_PCT);
     NRF_LOG_INFO("Battery percent successfully read at %d%", battery_percent);
-    NRF_LOG_FLUSH();
+    NRF_LOG_FLUSH();*/
     ///// End SoC Init and Config setup ////////////////////////////////////////////////
 
     NRF_LOG_INFO("BLE Base Application started!");
 
     advertising_start();
+
+    // NFC Init and Setup /////////////////////////////////////////////////////////////
+
+    /* Initialize FDS. */
+    err_code = ndef_file_setup();
+    APP_ERROR_CHECK(err_code);
+
+    /* Load NDEF message from the flash file. */
+    err_code = ndef_file_load(m_ndef_msg_buf, sizeof(m_ndef_msg_buf));
+    APP_ERROR_CHECK(err_code);
+
+    // Restore default NDEF message.
+    if (bsp_board_button_state_get(APP_DEFAULT_BTN))
+    {
+        uint32_t size = sizeof(m_ndef_msg_buf);
+        err_code = ndef_file_default_message(m_ndef_msg_buf, &size);
+        APP_ERROR_CHECK(err_code);
+        err_code = ndef_file_update(m_ndef_msg_buf, NDEF_FILE_SIZE);
+        APP_ERROR_CHECK(err_code);
+        NRF_LOG_DEBUG("Default NDEF message restored!");
+    }
+
+    /* Set up NFC */
+    err_code = nfc_t4t_setup(nfc_callback, NULL);
+    APP_ERROR_CHECK(err_code);
+
+    /* Run Read-Write mode for Type 4 Tag platform */
+    err_code = nfc_t4t_ndef_rwpayload_set(m_ndef_msg_buf, sizeof(m_ndef_msg_buf));
+    APP_ERROR_CHECK(err_code);
+
+    NRF_LOG_INFO("Writable NDEF message example started.");
+
+    /* Start sensing NFC field */
+    err_code = nfc_t4t_emulation_start();
+    APP_ERROR_CHECK(err_code);
+
+    // Once Bluetooth is connected and color properly configured, disable NFC using
+    //nfc_t4t_emulation_stop();
+    //nfc_t4t_done();
+
+   /* while (1)
+    {
+        app_sched_execute();
+
+        NRF_LOG_FLUSH();
+        __WFE();
+    }*/
 
     // Enter main loop.
     for(;;)

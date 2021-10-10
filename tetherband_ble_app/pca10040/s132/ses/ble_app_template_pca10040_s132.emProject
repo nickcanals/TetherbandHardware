@@ -92,6 +92,9 @@
       <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_clock.c" />
       <file file_name="../../../../../../integration/nrfx/legacy/nrf_drv_twi.c" />
       <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_twi.c" />
+      <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_nfct.c" />
+      <file file_name="../../../../../../modules/nrfx/hal/nrf_nvmc.c" />
+      <file file_name="../../../../../../modules/nrfx/drivers/src/nrfx_timer.c" />
     </folder>
     <folder Name="Board Support">
       <file file_name="../../../../../../components/libraries/bsp/bsp.c" />
@@ -121,6 +124,7 @@
     <folder Name="Application">
       <file file_name="../../../main.c" />
       <file file_name="../config/sdk_config.h" />
+      <file file_name="../../../ndef_file_m.c" />
     </folder>
     <folder Name="nRF_Segger_RTT">
       <file file_name="../../../../../../external/segger_rtt/SEGGER_RTT.c" />
@@ -130,17 +134,25 @@
     <folder Name="UTF8/UTF16 converter">
       <file file_name="../../../../../../external/utf_converter/utf.c" />
     </folder>
-    <folder Name="nRF_SoftDevice">
-      <file file_name="../../../../../../components/softdevice/common/nrf_sdh.c" />
-      <file file_name="../../../../../../components/softdevice/common/nrf_sdh_ble.c" />
-      <file file_name="../../../../../../components/softdevice/common/nrf_sdh_soc.c" />
-    </folder>
     <folder Name="BLE Services">
       <file file_name="../../../../../../components/ble/ble_services/custom/custom_services.c" />
       <file file_name="../../../../../../components/ble/ble_services/ble_bas/ble_bas.c" />
     </folder>
     <folder Name="BQ27421-G1_State_of_Charge">
       <file file_name="../../../../../../components/BQ27421-G1_state_of_charge/gauge.c" />
+    </folder>
+    <folder Name="nRF_NFC">
+      <file file_name="../../../../../../components/nfc/ndef/generic/message/nfc_ndef_msg.c" />
+      <file file_name="../../../../../../components/nfc/ndef/generic/record/nfc_ndef_record.c" />
+      <file file_name="../../../../../../components/nfc/platform/nfc_platform.c" />
+      <file file_name="../../../../../../components/nfc/t4t_lib/nfc_t4t_lib_gcc.a" />
+      <file file_name="../../../../../../components/nfc/ndef/uri/nfc_uri_msg.c" />
+      <file file_name="../../../../../../components/nfc/ndef/uri/nfc_uri_rec.c" />
+    </folder>
+    <folder Name="nRF_SoftDevice">
+      <file file_name="../../../../../../components/softdevice/common/nrf_sdh.c" />
+      <file file_name="../../../../../../components/softdevice/common/nrf_sdh_ble.c" />
+      <file file_name="../../../../../../components/softdevice/common/nrf_sdh_soc.c" />
     </folder>
   </project>
   <configuration
