@@ -1,8 +1,8 @@
 Output/Debug/Obj/ble_app_template_pca10040_s132/peer_manager_handler.o: \
- C\:\nrf_sdk\DeviceDownload\nRF5SDK1702d674dde\nRF5_SDK_17.0.2_d674dde\components\ble\peer_manager\peer_manager_handler.c \
- C\:\nrf_sdk\DeviceDownload\nRF5SDK1702d674dde\nRF5_SDK_17.0.2_d674dde\components\ble\peer_manager\peer_manager_handler.h \
+ C\:\Users\nickc\Desktop\Nordic\nRF5_SDK_17.1.0_ddde560\nRF5_SDK_17.1.0_ddde560\components\ble\peer_manager\peer_manager_handler.c \
+ C\:\Users\nickc\Desktop\Nordic\nRF5_SDK_17.1.0_ddde560\nRF5_SDK_17.1.0_ddde560\components\ble\peer_manager\peer_manager_handler.h \
  ../../../../../../components/softdevice/s132/headers/ble.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/stdint.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/stdint.h \
  ../../../../../../components/softdevice/s132/headers/nrf_svc.h \
  ../../../../../../components/softdevice/s132/headers/nrf_error.h \
  ../../../../../../components/softdevice/s132/headers/ble_err.h \
@@ -26,11 +26,11 @@ Output/Debug/Obj/ble_app_template_pca10040_s132/peer_manager_handler.o: \
  ../../../../../../modules/nrfx/mdk/nrf52_name_change.h \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
  ../../../../../../components/softdevice/s132/headers/ble_gatts.h \
- C\:\nrf_sdk\DeviceDownload\nRF5SDK1702d674dde\nRF5_SDK_17.0.2_d674dde\components\ble\peer_manager\peer_manager.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/stdbool.h \
+ C\:\Users\nickc\Desktop\Nordic\nRF5_SDK_17.1.0_ddde560\nRF5_SDK_17.1.0_ddde560\components\ble\peer_manager\peer_manager.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/stdbool.h \
  ../../../../../../components/libraries/util/sdk_common.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/string.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/__crossworks.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/string.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/__crossworks.h \
  ../config/sdk_config.h \
  ../../../../../../components/libraries/util/nordic_common.h \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
@@ -38,13 +38,13 @@ Output/Debug/Obj/ble_app_template_pca10040_s132/peer_manager_handler.o: \
  ../../../../../../components/libraries/util/sdk_errors.h \
  ../../../../../../components/softdevice/s132/headers/nrf_error.h \
  ../../../../../../components/libraries/util/app_util.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/stddef.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/stddef.h \
  ../../../../../../components/softdevice/s132/headers/nrf52/nrf_mbr.h \
  ../../../../../../components/softdevice/s132/headers/nrf_svc.h \
  ../../../../../../components/libraries/util/sdk_macros.h \
  ../../../../../../components/libraries/util/nrf_assert.h \
  ../../../../../../components/softdevice/s132/headers/ble_gap.h \
- C\:\nrf_sdk\DeviceDownload\nRF5SDK1702d674dde\nRF5_SDK_17.0.2_d674dde\components\ble\peer_manager\peer_manager_types.h \
+ C\:\Users\nickc\Desktop\Nordic\nRF5_SDK_17.1.0_ddde560\nRF5_SDK_17.1.0_ddde560\components\ble\peer_manager\peer_manager_types.h \
  ../../../../../../components/softdevice/s132/headers/ble_hci.h \
  ../../../../../../components/ble/common/ble_gatt_db.h \
  ../../../../../../components/softdevice/s132/headers/ble_gattc.h \
@@ -54,10 +54,10 @@ Output/Debug/Obj/ble_app_template_pca10040_s132/peer_manager_handler.o: \
  ../../../../../../components/softdevice/s132/headers/nrf_error_soc.h \
  ../../../../../../components/softdevice/s132/headers/nrf_nvic.h \
  ../../../../../../components/libraries/util/app_error.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/stdio.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/stdio.h \
  ../../../../../../components/libraries/util/app_error_weak.h \
- C\:\nrf_sdk\DeviceDownload\nRF5SDK1702d674dde\nRF5_SDK_17.0.2_d674dde\components\ble\peer_manager\peer_database.h \
- C\:\nrf_sdk\DeviceDownload\nRF5SDK1702d674dde\nRF5_SDK_17.0.2_d674dde\components\ble\peer_manager\peer_manager_internal.h \
+ C\:\Users\nickc\Desktop\Nordic\nRF5_SDK_17.1.0_ddde560\nRF5_SDK_17.1.0_ddde560\components\ble\peer_manager\peer_database.h \
+ C\:\Users\nickc\Desktop\Nordic\nRF5_SDK_17.1.0_ddde560\nRF5_SDK_17.1.0_ddde560\components\ble\peer_manager\peer_manager_internal.h \
  ../../../../../../components/libraries/util/sdk_errors.h \
  ../../../../../../components/libraries/util/app_error.h \
  ../../../../../../components/ble/common/ble_conn_state.h \
@@ -75,5 +75,5 @@ Output/Debug/Obj/ble_app_template_pca10040_s132/peer_manager_handler.o: \
  ../../../../../../components/libraries/log/src/nrf_log_ctrl_internal.h \
  ../../../../../../components/libraries/log/nrf_log_backend_interface.h \
  ../../../../../../components/libraries/memobj/nrf_memobj.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/stdlib.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/stdlib.h \
  ../../../../../../components/libraries/balloc/nrf_balloc.h

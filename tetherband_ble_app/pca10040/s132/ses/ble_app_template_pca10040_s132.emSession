@@ -14,6 +14,12 @@
   <ProjectSessionItem path="ble_app_template_pca10040_s132"/>
   <ProjectSessionItem path="ble_app_template_pca10040_s132;ble_app_template_pca10040_s132"/>
   <ProjectSessionItem path="ble_app_template_pca10040_s132;ble_app_template_pca10040_s132;Application"/>
+  <ProjectSessionItem path="ble_app_template_pca10040_s132;ble_app_template_pca10040_s132;BLE Services"/>
+  <ProjectSessionItem path="ble_app_template_pca10040_s132;ble_app_template_pca10040_s132;Board Definition"/>
+  <ProjectSessionItem path="ble_app_template_pca10040_s132;ble_app_template_pca10040_s132;Board Support"/>
+  <ProjectSessionItem path="ble_app_template_pca10040_s132;ble_app_template_pca10040_s132;nRF_Drivers"/>
+  <ProjectSessionItem path="ble_app_template_pca10040_s132;ble_app_template_pca10040_s132;nRF_Libraries"/>
+  <ProjectSessionItem path="ble_app_template_pca10040_s132;ble_app_template_pca10040_s132;UTF8/UTF16 converter"/>
  </Project>
  <Register1/>
  <Register2/>
@@ -38,8 +44,22 @@
   <Watches active="0" update="Never"/>
  </Watch4>
  <Files>
-  <SessionOpenFile windowGroup="DockEditLeft" x="46" y="140" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="ble_app_template_pca10040_s132.emProject" selected="0" top="137" codecName="Default"/>
-  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="0" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../main.c" selected="1" top="55" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="874" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../main.c" selected="1" top="983" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="5" y="149" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../../../../components/ble/ble_services/custom/custom_services.c" selected="0" top="149" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="45" y="69" useTextEdit="1" openedFrom="C:/Users/nickc/Desktop/Nordic/nRF5_SDK_17.1.0_ddde560/nRF5_SDK_17.1.0_ddde560/components/ble/ble_services/custom/custom_services.c" useBinaryEdit="0" left="0" path="../../../../../../components/ble/ble_services/custom/custom_services.h" selected="0" top="35" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="0" y="0" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../../../../integration/nrfx/legacy/nrf_drv_ppi.c" selected="0" top="50" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="6" y="528" useTextEdit="1" openedFrom="C:/Users/nickc/Desktop/Nordic/nRF5_SDK_17.1.0_ddde560/nRF5_SDK_17.1.0_ddde560/examples/TetherbandHardware/tetherband_ble_app/main.c" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/bsp/bsp.c" selected="0" top="491" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="5" y="208" useTextEdit="1" openedFrom="C:/Users/nickc/Desktop/Nordic/nRF5_SDK_17.1.0_ddde560/nRF5_SDK_17.1.0_ddde560/components/libraries/bsp/bsp.c" useBinaryEdit="0" left="0" path="../../../../../../components/boards/boards.c" selected="0" top="171" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="5" y="154" useTextEdit="1" openedFrom="C:/Users/nickc/Desktop/Nordic/nRF5_SDK_17.1.0_ddde560/nRF5_SDK_17.1.0_ddde560/components/boards/boards.c" useBinaryEdit="0" left="0" path="../../../../../../components/boards/boards.h" selected="0" top="117" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="14" y="56" useTextEdit="1" openedFrom="C:/Users/nickc/Desktop/Nordic/nRF5_SDK_17.1.0_ddde560/nRF5_SDK_17.1.0_ddde560/components/boards/boards.h" useBinaryEdit="0" left="0" path="../../../../../../components/boards/pca10040.h" selected="0" top="55" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="25" y="17" useTextEdit="1" openedFrom="C:/Users/nickc/Desktop/Nordic/nRF5_SDK_17.1.0_ddde560/nRF5_SDK_17.1.0_ddde560/components/boards/boards.h" useBinaryEdit="0" left="0" path="../../../../../../components/boards/custom_board.h" selected="0" top="0" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="50" y="205" useTextEdit="1" openedFrom="C:/Users/nickc/Desktop/Nordic/nRF5_SDK_17.1.0_ddde560/nRF5_SDK_17.1.0_ddde560/examples/TetherbandHardware/tetherband_ble_app/main.c" useBinaryEdit="0" left="0" path="../../../ndef_file_m.c" selected="0" top="0" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="9" y="163" useTextEdit="1" openedFrom="C:/Users/nickc/Desktop/Nordic/nRF5_SDK_17.1.0_ddde560/nRF5_SDK_17.1.0_ddde560/examples/TetherbandHardware/tetherband_ble_app/main.c" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/scheduler/app_scheduler.c" selected="0" top="154" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="11" y="78" useTextEdit="1" openedFrom="C:/Users/nickc/Desktop/Nordic/nRF5_SDK_17.1.0_ddde560/nRF5_SDK_17.1.0_ddde560/examples/TetherbandHardware/tetherband_ble_app/main.c" useBinaryEdit="0" left="0" path="../../../ndef_file_m.h" selected="0" top="54" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="9" y="230" useTextEdit="1" openedFrom="C:/Users/nickc/Desktop/Nordic/nRF5_SDK_17.1.0_ddde560/nRF5_SDK_17.1.0_ddde560/examples/TetherbandHardware/tetherband_ble_app/main.c" useBinaryEdit="0" left="0" path="../../../../../../components/ble/ble_services/ble_bas/ble_bas.c" selected="0" top="260" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="8" y="67" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/log/nrf_log_default_backends.h" selected="0" top="36" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="11" y="197" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/timer/app_timer.h" selected="0" top="161" codecName="Default"/>
+  <SessionOpenFile windowGroup="DockEditLeft" x="11" y="567" useTextEdit="1" openedFrom="" useBinaryEdit="0" left="0" path="../../../../../../components/libraries/timer/app_timer2.c" selected="0" top="531" codecName="Default"/>
  </Files>
- <ARMCrossStudioWindow activeProject="ble_app_template_pca10040_s132" fileDialogDefaultFilter="*.c;*.cpp;*.cxx;*.cc;*.h;*.hpp;*.hxx" autoConnectTarget="J-Link" buildConfiguration="Debug" sessionSettings="" debugSearchFileMap="" fileDialogInitialDirectory="" debugSearchPath="" autoConnectCapabilities="3199"/>
+ <ARMCrossStudioWindow activeProject="ble_app_template_pca10040_s132" fileDialogDefaultFilter="*.c" autoConnectTarget="J-Link" buildConfiguration="Debug" sessionSettings="" debugSearchFileMap="" fileDialogInitialDirectory="C:/Users/nickc/Desktop/Nordic/nRF5_SDK_17.1.0_ddde560/nRF5_SDK_17.1.0_ddde560/integration/nrfx/legacy" debugSearchPath="" autoConnectCapabilities="3199"/>
 </session>

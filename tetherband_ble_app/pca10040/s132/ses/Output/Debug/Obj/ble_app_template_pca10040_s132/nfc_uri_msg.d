@@ -1,10 +1,10 @@
 Output/Debug/Obj/ble_app_template_pca10040_s132/nfc_uri_msg.o: \
- C\:\nrf_sdk\DeviceDownload\nRF5SDK1702d674dde\nRF5_SDK_17.0.2_d674dde\components\nfc\ndef\uri\nfc_uri_msg.c \
+ C\:\Users\nickc\Desktop\Nordic\nRF5_SDK_17.1.0_ddde560\nRF5_SDK_17.1.0_ddde560\components\nfc\ndef\uri\nfc_uri_msg.c \
  ../../../../../../components/libraries/util/sdk_common.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/stdint.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/stdbool.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/string.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/__crossworks.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/stdint.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/stdbool.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/string.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/__crossworks.h \
  ../config/sdk_config.h \
  ../../../../../../components/libraries/util/nordic_common.h \
  ../../../../../../modules/nrfx/mdk/compiler_abstraction.h \
@@ -12,7 +12,7 @@ Output/Debug/Obj/ble_app_template_pca10040_s132/nfc_uri_msg.o: \
  ../../../../../../components/libraries/util/sdk_errors.h \
  ../../../../../../components/softdevice/s132/headers/nrf_error.h \
  ../../../../../../components/libraries/util/app_util.h \
- C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.50d/include/stddef.h \
+ C\:/Program\ Files/SEGGER/SEGGER\ Embedded\ Studio\ for\ ARM\ 5.60a/include/stddef.h \
  ../../../../../../modules/nrfx/mdk/nrf.h \
  ../../../../../../modules/nrfx/mdk/nrf52.h \
  ../../../../../../components/toolchain/cmsis/include/core_cm4.h \
@@ -29,9 +29,9 @@ Output/Debug/Obj/ble_app_template_pca10040_s132/nfc_uri_msg.o: \
  ../../../../../../components/softdevice/s132/headers/nrf_svc.h \
  ../../../../../../components/libraries/util/sdk_macros.h \
  ../../../../../../components/libraries/util/nrf_assert.h \
- C\:\nrf_sdk\DeviceDownload\nRF5SDK1702d674dde\nRF5_SDK_17.0.2_d674dde\components\nfc\ndef\uri\nfc_uri_msg.h \
+ C\:\Users\nickc\Desktop\Nordic\nRF5_SDK_17.1.0_ddde560\nRF5_SDK_17.1.0_ddde560\components\nfc\ndef\uri\nfc_uri_msg.h \
  ../../../../../../components/nfc/ndef/generic/message/nfc_ndef_msg.h \
  ../../../../../../components/nfc/ndef/generic/record/nfc_ndef_record.h \
  ../../../../../../components/libraries/util/sdk_errors.h \
- C\:\nrf_sdk\DeviceDownload\nRF5SDK1702d674dde\nRF5_SDK_17.0.2_d674dde\components\nfc\ndef\uri\nfc_uri_rec.h \
+ C\:\Users\nickc\Desktop\Nordic\nRF5_SDK_17.1.0_ddde560\nRF5_SDK_17.1.0_ddde560\components\nfc\ndef\uri\nfc_uri_rec.h \
  ../../../../../../components/libraries/util/sdk_macros.h

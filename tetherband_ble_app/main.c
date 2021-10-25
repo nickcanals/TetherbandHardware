@@ -102,11 +102,6 @@
 #include "nrf_csense.h"
 #include "nrf_drv_timer.h"
 
-// PWM sequence value parameters
-#define m_top 1000
-#define m_step 100
-#define test_1 10
-#define SPEAKER_OUT 12
 
 //Touch Sensor Parameters ///////////
 /* Time between RTC interrupts. */
@@ -157,11 +152,8 @@ NRF_CSENSE_SLIDER_4_DEF(m_slider,
                         (PAD2, THRESHOLD_PAD_2),
                         (PAD3, THRESHOLD_PAD_3),
                         (PAD4, THRESHOLD_PAD_4));
-/*lint -restore*/
-static nrfx_pwm_t m_pwm0 =NRFX_PWM_INSTANCE(0);
-uint16_t step = m_top / m_step;
-static nrf_pwm_values_common_t sequence_values[m_step * 4];//array to play a sequence
-uint16_t value=0;
+
+
 void bracelet_removed_flash();
 void repeated_timer_handler();
 uint8_t bracelet_removed = 0;
@@ -237,6 +229,30 @@ static uint16_t simulate_battery = 100;
 
 // NFC Functions ///////////////////////////////////////////////////////////////////////////////////////////////
 
+static void scheduler_nfc_color_config(int data){
+  if(data == 0){
+        nrf_gpio_pin_set(LED_ORANGE);
+    }
+    else if(data == 1){
+        nrf_gpio_pin_set(LED_PURPLE);
+    }
+    else if(data == 2){
+        nrf_gpio_pin_set(LED_YELLOW);
+    }
+    else if(data == 3){
+        nrf_gpio_pin_set(LED_RED);
+    }
+    else if(data == 4){
+        nrf_gpio_pin_set(LED_BLUE);
+    }
+    else{
+        nrf_gpio_pin_set(LED_GREEN);
+    }
+}
+
+
+
+
 /**
  * @brief Function for updating NDEF message in the flash file.
  */
@@ -250,6 +266,40 @@ static void scheduler_ndef_file_update(void * p_event_data, uint16_t event_size)
     // Update flash file with new NDEF message.
     err_code = ndef_file_update(m_ndef_msg_buf, m_ndef_msg_len + NLEN_FIELD_SIZE);
     APP_ERROR_CHECK(err_code);
+    
+    for(int i = 11; i < 17; i++){
+        NRF_LOG_INFO("HERE: %c", m_ndef_msg_buf[i]);
+    }
+    
+    int color_choice;
+    if((char*)m_ndef_msg_buf[11] == 'o'){
+        color_choice = 0;
+        NRF_LOG_INFO("Color Sent Over NFC Is: Orange");
+    }
+    else if((char*)m_ndef_msg_buf[11] == 'p'){
+        color_choice = 1;
+        NRF_LOG_INFO("Color Sent Over NFC Is: Purple");
+    }
+    else if((char*)m_ndef_msg_buf[11] == 'y'){
+        color_choice = 2;
+        NRF_LOG_INFO("Color Sent Over NFC Is: Yellow");
+    }
+    else if((char*)m_ndef_msg_buf[11] == 'r'){
+        color_choice = 3;
+        NRF_LOG_INFO("Color Sent Over NFC Is: Red");
+    }
+    else if((char*)m_ndef_msg_buf[11] == 'b'){
+        color_choice = 4;
+        NRF_LOG_INFO("Color Sent Over NFC Is: Blue");
+    }
+    else{
+        color_choice = 5;
+        NRF_LOG_INFO("Color Sent Over NFC Is: Green");
+    }
+
+    err_code = app_sched_event_put(NULL, 0, scheduler_nfc_color_config);
+    APP_ERROR_CHECK(err_code);
+
 
     NRF_LOG_INFO("NDEF message updated!");
 }
@@ -402,7 +452,7 @@ static void battery_level_meas_timeout_handler(void * p_context)
     if(simulate_battery != 0){
         simulate_battery -= 1;
     }
-    NRF_LOG_INFO("SIMULATE BATTERY LEVEL = %d", simulate_battery);
+    //NRF_LOG_INFO("SIMULATE BATTERY LEVEL = %d", simulate_battery);
     
     uint8_t percentage_batt_lvl = simulate_battery;
     
@@ -691,51 +741,6 @@ static void advertising_start(void)
     APP_ERROR_CHECK(err_code);
 }
 
-///// Local Alert Handler ////////////////////////////////////////////////////////
-static void pwm_common_init(void)//assigning array values
-{
-
-   for(int i = 0; i<m_step; i++)
-   {
-     value += step; //1st step:0 +100=100...2nd:100+100=200...so on
-     sequence_values[i]=value;
-     sequence_values[m_step+i] = m_top - value; //sequence_values[100+1] = 1,000 -100=990...so on
-   }
-
-   nrfx_pwm_config_t const config0=
-   {
-    .output_pins=
-    {
-       //BSP_LED_0 | NRFX_PWM_PIN_INVERTED,
-       SPEAKER_OUT,
-       NRFX_PWM_PIN_NOT_USED,
-       NRFX_PWM_PIN_NOT_USED,
-     },
-     .irq_priority= APP_IRQ_PRIORITY_LOWEST,
-     .base_clock = NRF_PWM_CLK_2MHz,
-     .count_mode = NRF_PWM_MODE_UP,
-     .top_value = m_top,
-     .load_mode = NRF_PWM_LOAD_COMMON,
-     .step_mode = NRF_PWM_STEP_AUTO
-      };
-
-      APP_ERROR_CHECK(nrfx_pwm_init(&m_pwm0, &config0,NULL));
-}
-
-static void pwm_play(void)
-{
- nrf_pwm_sequence_t const seq0=
- {
-   .values.p_common = sequence_values,
-   .length          = NRF_PWM_VALUES_LENGTH(sequence_values),
-   .repeats         = 0,
-   .end_delay       = 0
-
-  };
-
- (void)nrfx_pwm_simple_playback(&m_pwm0, &seq0, 1, NRFX_PWM_FLAG_LOOP);
-
- }
 
  ///// Touch Sensor Handler ////////////////////////////////////////////////
   /**
@@ -815,9 +820,10 @@ void nrf_csense_handler(nrf_csense_evt_t * p_evt)
     }
 }
 
-/**
- * @brief Function for starting Capacitive Sensor High module.
- *
+
+
+///////////////////////TOUCH SENSOR FUNCTIONS//////////////////////////////////
+/*
  * Function enables one slider and one button.
  */
 static void csense_start(void)
@@ -834,10 +840,8 @@ static void csense_start(void)
    // APP_ERROR_CHECK(err_code);
 }
 
-void bracelet_removed_flash()
-{
-   if(bracelet_removed==1)
-   {
+void bracelet_removed_flash(){
+   if(bracelet_removed==1){
      pwm_play();
      nrf_gpio_pin_set(LED_BLUE);
      nrf_gpio_pin_set(MOTOR_OUT);
@@ -847,22 +851,29 @@ void bracelet_removed_flash()
      nrf_delay_ms(250);
     // NRF_LOG_INFO("Bracelet is off");
    }
-     else
-     {
-      if (bracelet_initial!=2)
-     {
+   else{
+     if (bracelet_initial!=2){
         nrf_gpio_pin_set(LED_BLUE);
         nrf_gpio_pin_clear(SPEAKER_OUT);
         return;
      }
-     else
-     return;
-}
+     else{
+      return;
+     }
+   }
 }
 
+void scheduler_touch_sensor_handler(){
+    bracelet_removed_flash();
+    __WFI();
+    NRF_LOG_FLUSH();
+}
 
-/**@brief Function for application main entry.
- */
+/////////////END OF TOUCH SENSOR FUNCTIONS////////////////////////
+
+
+
+//////////////////MAIN FUNCTION//////////////////////////////////
 int main(void)
 {
     // SoC IC variables ////////////
@@ -974,12 +985,13 @@ int main(void)
     /* Run Read-Write mode for Type 4 Tag platform */
     err_code = nfc_t4t_ndef_rwpayload_set(m_ndef_msg_buf, sizeof(m_ndef_msg_buf));
     APP_ERROR_CHECK(err_code);
-
     NRF_LOG_INFO("Writable NDEF message example started.");
 
     /* Start sensing NFC field */
     err_code = nfc_t4t_emulation_start();
     APP_ERROR_CHECK(err_code);
+
+    NRF_LOG_INFO("BLAH BLAH BLAH");
 
     // Once Bluetooth is connected and color properly configured, disable NFC using
     //nfc_t4t_emulation_stop();
@@ -998,69 +1010,54 @@ int main(void)
     {
         idle_state_handle();
     }
-    ///// Local Alert Config and Setup ////////////////////////////////////////////////
+
+
+    ////////////////////////// Local Alert Config and Setup ////////////////////////////
     pwm_common_init();
-    log_init();
     bsp_board_init(BSP_INIT_LEDS);
     pwm_play();
     NRF_LOG_INFO("PWM application started");
     nrf_gpio_cfg_output(LED_BLUE); //configures pin as output
-    nrf_gpio_cfg_output(MOTOR_OUT);
     nrf_gpio_cfg_output(LED_YELLOW);
     nrf_gpio_cfg_output(LED_RED);
     nrf_gpio_cfg_output(LED_GREEN);
     nrf_gpio_cfg_output(LED_ORANGE);
     nrf_gpio_cfg_output(LED_PURPLE);
-    ///// End Local Alert Config and Setup ////////////////////////////////////////////
+    nrf_gpio_cfg_output(MOTOR_OUT);
+    /////////////////////// End Local Alert Config and Setup ///////////////////////////
 
-    ///// Touch Sensor Config and Setup ///////////////////////////////////////////////
+
+    /////////////////////// TOUCH SENSOR PART /////////////////////////////////////////
     //timer_init();
-    nrf_gpio_cfg_output(LED_BLUE);
-    err_code = NRF_LOG_INIT(NULL);
-    APP_ERROR_CHECK(err_code);
-    NRF_LOG_DEFAULT_BACKENDS_INIT();
-    err_code = app_timer_init();
-    APP_ERROR_CHECK(err_code);
     err_code = clock_config();
     APP_ERROR_CHECK(err_code);
     NRF_LOG_INFO("Capacitive sensing library example started.");
     csense_start();
-    while (1)
-    {
-        bracelet_removed_flash();
-        __WFI();
-        NRF_LOG_FLUSH();
-    }
-    while(1)
-   {
-    nrf_gpio_pin_set(LED_BLUE);// setting logic 1 on pin 13
-    nrf_gpio_pin_set(LED_YELLOW);
-    nrf_gpio_pin_set(LED_RED);
-    nrf_gpio_pin_set(LED_GREEN);
-    nrf_gpio_pin_set(LED_ORANGE);
-    nrf_gpio_pin_set(LED_PURPLE);
-    nrf_gpio_pin_set(MOTOR_OUT);
-    nrf_delay_ms(500);
-    nrf_gpio_pin_clear(LED_BLUE); // setting logic 0 on pin 13
-    nrf_gpio_pin_clear(LED_YELLOW);
-    nrf_gpio_pin_clear(LED_RED);
-    nrf_gpio_pin_clear(LED_GREEN);
-    nrf_gpio_pin_clear(LED_ORANGE);
-    nrf_gpio_pin_clear(LED_PURPLE);
-    nrf_gpio_pin_clear(MOTOR_OUT);
-    nrf_delay_ms(500);
-    nrf_gpio_pin_set(LED_BLUE);// setting logic 1 on pin 13
-    nrf_gpio_pin_set(LED_YELLOW);
-    nrf_gpio_pin_set(LED_RED);
-    nrf_gpio_pin_set(LED_GREEN);
-    nrf_gpio_pin_set(LED_ORANGE);
-    nrf_gpio_pin_set(LED_PURPLE);
-    nrf_gpio_pin_set(MOTOR_OUT);
-    
-   }
-    ///// End Touch Sensor Config and Setup ///////////////////////////////////////////
-}
 
-/**
- * @}
- */
+    while (1){
+      err_code = app_sched_event_put(NULL, 0, scheduler_touch_sensor_handler);
+      APP_ERROR_CHECK(err_code);
+    }
+
+    ////////////////////////////// END TOUCH SENSOR PART //////////////////////////////
+
+
+    //////////////////// EMERGENCY ALERT PART /////////////////////////////////////////
+    bool emergency_flag = false;
+    for(int m = 0; m < 1000; m++){
+      if(emergency_flag == false){
+        err_code = app_sched_event_put(NULL, 0, scheduler_emergency_alert_ON_handler);
+        APP_ERROR_CHECK(err_code);
+        emergency_flag = true;
+      }
+      else{
+        err_code = app_sched_event_put(NULL, 0, scheduler_emergency_alert_OFF_handler);
+        APP_ERROR_CHECK(err_code);
+        emergency_flag = false;
+      }
+
+      nrf_delay_ms(1000);
+    }
+
+    ///////////////////// END EMERGENCY ALERT PART /////////////////////////////////////
+}
