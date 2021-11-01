@@ -668,10 +668,31 @@ static void power_management_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
+
+
+void scheduler_touch_sensor_handler(void * p_event_data, uint16_t event_size){
+    UNUSED_PARAMETER(p_event_data);
+    UNUSED_PARAMETER(event_size);
+    
+    //NRF_LOG_INFO("CSENSE HANDLER FUNCTION EXECUTING HERE");
+    bracelet_removed_flash();
+    __WFI();
+    NRF_LOG_FLUSH();
+}
+
+
+
+
+
 // handler for idle power state
 static void idle_state_handle(void)
 {
     app_sched_execute();
+    
+    //addd in Csense stuff here
+    ret_code_t err_code = app_sched_event_put(NULL, 0, scheduler_touch_sensor_handler);
+    APP_ERROR_CHECK(err_code);
+
     if(NRF_LOG_PROCESS() == false)
     {
         nrf_pwr_mgmt_run();
@@ -713,7 +734,7 @@ static void advertising_start(void)
 }
 
 
- ///// Touch Sensor Handler ////////////////////////////////////////////////
+///////////////////////TOUCH SENSOR FUNCTIONS//////////////////////////////////
   /**
  * @brief Function for starting the internal LFCLK XTAL oscillator.
  *
@@ -757,12 +778,12 @@ static ret_code_t clock_config(void)
 void nrf_csense_handler(nrf_csense_evt_t * p_evt)
 {
        
-        switch (p_evt->nrf_csense_evt_type)
+    switch (p_evt->nrf_csense_evt_type)
     {
         case NRF_CSENSE_BTN_EVT_PRESSED:
         bracelet_removed = 0;
         bracelet_initial=0;
-        nrf_gpio_pin_set(LED_BLUE);
+        bsp_board_led_on(LED_BLUE_IDX);
         NRF_LOG_INFO("Bracelet is on");
         break;
           
@@ -792,13 +813,10 @@ void nrf_csense_handler(nrf_csense_evt_t * p_evt)
 }
 
 
-
-///////////////////////TOUCH SENSOR FUNCTIONS//////////////////////////////////
 /*
  * Function enables one slider and one button.
  */
-static void csense_start(void)
-{
+static void csense_start(void){
     ret_code_t err_code;
     static uint16_t touched_counter = 0;
     err_code = nrf_csense_init(nrf_csense_handler, APP_TIMER_TICKS_TIMEOUT);
@@ -809,6 +827,7 @@ static void csense_start(void)
     APP_ERROR_CHECK(err_code);
     //err_code = nrf_csense_add(&m_slider);
    // APP_ERROR_CHECK(err_code);
+   NRF_LOG_INFO("CSENSE START FUNCTION EXECUTING HERE");
 }
 
 void bracelet_removed_flash(){
@@ -820,7 +839,7 @@ void bracelet_removed_flash(){
      nrf_gpio_pin_clear(LED_BLUE);
      nrf_gpio_pin_clear(MOTOR_OUT);
      nrf_delay_ms(250);
-    // NRF_LOG_INFO("Bracelet is off");
+     NRF_LOG_INFO("Bracelet is off");
    }
    else{
      if (bracelet_initial!=2){
@@ -832,15 +851,6 @@ void bracelet_removed_flash(){
       return;
      }
    }
-}
-
-void scheduler_touch_sensor_handler(void * p_event_data, uint16_t event_size){
-    UNUSED_PARAMETER(p_event_data);
-    UNUSED_PARAMETER(event_size);
-
-    bracelet_removed_flash();
-    __WFI();
-    NRF_LOG_FLUSH();
 }
 
 /////////////END OF TOUCH SENSOR FUNCTIONS////////////////////////
@@ -933,15 +943,6 @@ int main(void)
 
     // NFC Init and Setup /////////////////////////////////////////////////////////////
 
-    /*nrf_gpio_cfg_output(LED_BLUE); //configures pin as output
-    nrf_gpio_cfg_output(LED_YELLOW);
-    nrf_gpio_cfg_output(LED_RED);
-    nrf_gpio_cfg_output(LED_GREEN);
-    nrf_gpio_cfg_output(LED_ORANGE);
-    nrf_gpio_cfg_output(LED_PURPLE);
-    nrf_gpio_cfg_output(MOTOR_OUT);
-    nrf_gpio_cfg_output(SPEAKER_OUT);*/
-
     /* Initialize FDS. */
     err_code = ndef_file_setup();
     APP_ERROR_CHECK(err_code);
@@ -976,15 +977,19 @@ int main(void)
 
     /////////////////////// TOUCH SENSOR PART /////////////////////////////////////////
     //timer_init();
-    err_code = clock_config();
-    APP_ERROR_CHECK(err_code);
+    //err_code = clock_config();
+    //APP_ERROR_CHECK(err_code);
     NRF_LOG_INFO("Capacitive sensing library example started.");
     csense_start();
 
-    //while (1){
-      //err_code = app_sched_event_put(NULL, 0, scheduler_touch_sensor_handler);
-      //APP_ERROR_CHECK(err_code);
+    //while(1){
+      //bracelet_removed_flash();
+      //__WFI();
+     // NRF_LOG_FLUSH();
     //}
+
+    //err_code = app_sched_event_put(NULL, 0, scheduler_touch_sensor_handler);
+    //APP_ERROR_CHECK(err_code);
 
     ////////////////////////////// END TOUCH SENSOR PART //////////////////////////////
 
@@ -1001,6 +1006,8 @@ int main(void)
         NRF_LOG_FLUSH();
         __WFE();
     }*/
+
+    bsp_board_led_on(MOTOR_OUT_IDX);
 
     // Enter main loop.
     for(;;)
@@ -1026,23 +1033,23 @@ int main(void)
 
 
     //////////////////// EMERGENCY ALERT PART /////////////////////////////////////////
-    //bool emergency_flag = false;
-    //int flag_flipper = 0;
-    //while(emergency_flag == true){
-      //for(int m = 0; m < 1000; m++){
-        //if(flag_flipper == 0){
-          //err_code = app_sched_event_put(NULL, 0, scheduler_emergency_alert_ON_handler);
-          //APP_ERROR_CHECK(err_code);
-          //flag_flipper = 1;
-        //}
-        //else{
-          //err_code = app_sched_event_put(NULL, 0, scheduler_emergency_alert_OFF_handler);
-          //APP_ERROR_CHECK(err_code);
-          //flag_flipper = 0;
-        //}
+    bool emergency_flag = false;
+    int flag_flipper = 0;
+    while(emergency_flag == true){
+      for(int m = 0; m < 1000; m++){
+        if(flag_flipper == 0){
+          err_code = app_sched_event_put(NULL, 0, scheduler_emergency_alert_ON_handler);
+          APP_ERROR_CHECK(err_code);
+          flag_flipper = 1;
+        }
+        else{
+          err_code = app_sched_event_put(NULL, 0, scheduler_emergency_alert_OFF_handler);
+          APP_ERROR_CHECK(err_code);
+          flag_flipper = 0;
+        }
 
-        //nrf_delay_ms(750);
-      //}
-    //}
+        nrf_delay_ms(750);
+      }
+    }
     ///////////////////// END EMERGENCY ALERT PART /////////////////////////////////////
 }

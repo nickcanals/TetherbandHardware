@@ -32,6 +32,8 @@
 "Output/Debug/Obj/ble_app_template_pca10040_s132/nrf_sortlist.o"
 "Output/Debug/Obj/ble_app_template_pca10040_s132/nrf_strerror.o"
 "Output/Debug/Obj/ble_app_template_pca10040_s132/sensorsim.o"
+"Output/Debug/Obj/ble_app_template_pca10040_s132/nrf_csense.o"
+"Output/Debug/Obj/ble_app_template_pca10040_s132/nrf_drv_csense.o"
 "Output/Debug/Obj/ble_app_template_pca10040_s132/ses_startup_nrf52.o"
 "Output/Debug/Obj/ble_app_template_pca10040_s132/ses_startup_nrf_common.o"
 "Output/Debug/Obj/ble_app_template_pca10040_s132/system_nrf52.o"
