@@ -55,7 +55,7 @@
 #include <stdint.h>
 #include <string.h>
 #include <stdio.h>
-#include "custom_services.h"
+#include "custom_services1.h"
 
 #include "nrf_log.h"
 #include "nrf_log_ctrl.h"
@@ -90,75 +90,63 @@
 #include "ble_advertising.h"
 #include "ble_conn_params.h"
 #include "ble_bas.h"
+#include "ble_tps.h"
+#include "ble_ias.h"
+#include "ble_lls.h"
 /////////////////////////////
 
-//Local Alerts Includes///////////////
+//Local Alerts Includes//////
 #include "nrf_drv_pwm.h"
 #include "bsp.h"
 #include "nrf_drv_clock.h"
 #include "nrf_gpio.h"
+/////////////////////////////
 
-//Touch Sensor //////////////////////
+//Touch Sensor Includes /////
 #include "nrf_csense.h"
 #include "nrf_drv_timer.h"
+/////////////////////////////
+
+//PWM and Touch Sensor Parameters ////////////////////////////////////////////////////
+#define m_top 1000
+#define m_step 100
+#define test_1 10
+#define SPEAKER_OUT 12
 
 
-//Touch Sensor Parameters ///////////
 /* Time between RTC interrupts. */
 #define APP_TIMER_TICKS_TIMEOUT APP_TIMER_TICKS(50)
 
 /* Scale range. */
 #define RANGE                   50
-
-/* Analog inputs. */
-#define AIN1                    1
-#define AIN2                    2
-#define AIN3                    3
-#define AIN4                    4
-#define AIN7                    7
-
-/* Definition which pads use which analog inputs. */
-#define BUTTON                  AIN7
-#define PAD1                    AIN4
-#define PAD4                    AIN4
-#ifdef NRF51
-#define PAD2                    AIN2
-#define PAD3                    AIN3
-#else
-#define PAD2                    AIN1
-#define PAD3                    AIN2
-#endif
-/*#define SPEAKER_OUT  6
-#define MOTOR_OUT    7
-#define LED_PURPLE   13
-#define LED_YELLOW   14
-#define LED_ORANGE   15
-#define LED_RED      16
-#define LED_BLUE     17
-#define LED_GREEN    18*/
-
-//* Threshold values for pads and button
-#define THRESHOLD_PAD_1         800
-#define THRESHOLD_PAD_2         800
-#define THRESHOLD_PAD_3         800
-#define THRESHOLD_PAD_4         800
 #define THRESHOLD_BUTTON        800
 
 /*lint -e19 -save */
-NRF_CSENSE_BUTTON_DEF(m_button, (BUTTON, THRESHOLD_BUTTON));
-NRF_CSENSE_SLIDER_4_DEF(m_slider,
-                        RANGE,
-                        (PAD1, THRESHOLD_PAD_1),
-                        (PAD2, THRESHOLD_PAD_2),
-                        (PAD3, THRESHOLD_PAD_3),
-                        (PAD4, THRESHOLD_PAD_4));
+NRF_CSENSE_BUTTON_DEF(m_button, (TOUCH_IN, THRESHOLD_BUTTON));
 
-
+/*lint -restore*/
+static nrfx_pwm_t m_pwm0 =NRFX_PWM_INSTANCE(0);
+uint16_t step = m_top / m_step;
+static nrf_pwm_values_common_t sequence_values[m_step * 4];//array to play a sequence
+uint16_t value=0;
 void bracelet_removed_flash();
 void repeated_timer_handler();
 uint8_t bracelet_removed = 0;
 uint8_t bracelet_initial = 2;
 
+nrf_pwm_sequence_t const seq0=
+{
+    .values.p_common = sequence_values,
+    .length          = NRF_PWM_VALUES_LENGTH(sequence_values),
+    .repeats         = 0,
+    .end_delay       = 0
+};
+
+#define LOCAL_ALERT_QUEUE_SIZE 7
+static uint8_t local_alert_queue[LOCAL_ALERT_QUEUE_SIZE]; // To decide which alert should be running 
+static uint8_t alerts_started = 0; // flag to know if alerts are started
+
+// END TOUCH SENSOR AND PWM ITEMS ///////////////////////////////////////////
 
 // DK MAC address is DD:C8:1A:7E:E8:F5
 // BLE Defines //////////////////////////////////////////////////////////////
@@ -167,7 +155,7 @@ uint8_t bracelet_initial = 2;
 #define APP_BLE_OBSERVER_PRIORITY           3
 
 // GAP Profile Parameters
-#define DEVICE_NAME                         "Tether01"
+#define DEVICE_NAME                         "Teth1"
 #define MIN_CONN_INTERVAL                   MSEC_TO_UNITS(100, UNIT_1_25_MS)
 #define MAX_CONN_INTERVAL                   MSEC_TO_UNITS(200, UNIT_1_25_MS)
 #define SLAVE_LATENCY                       0
@@ -182,7 +170,12 @@ uint8_t bracelet_initial = 2;
 #define MAX_CONN_PARAMS_UPDATE_COUNT        3
 
 // Time in between battery level reads (ms)
-#define BATTERY_LEVEL_MEAS_INTERVAL     APP_TIMER_TICKS(1200)
+#define BATTERY_LEVEL_MEAS_INTERVAL     APP_TIMER_TICKS(30000)
+//#define CSENSE_MEAS_INTERVAL            APP_TIMER_TICKS(500)
+#define LOCAL_ALERT_INTERVAL            APP_TIMER_TICKS(500)
+
+#define INITIAL_LLS_ALERT_LEVEL         BLE_CHAR_ALERT_LEVEL_NO_ALERT // For link loss service     
+#define TX_POWER_LEVEL                  (-8) // Sets the radio transmit power and is the value sent in TX power service used in distance determination.                                    
 // End BLE Defines //////////////////////////////////////////////////////////
 
 
@@ -199,9 +192,13 @@ uint8_t bracelet_initial = 2;
 NRF_BLE_QWR_DEF(m_qwr); // create queue writer object
 NRF_BLE_GATT_DEF(m_gatt); // create gatt object
 BLE_ADVERTISING_DEF(m_advert); // create advertising object
-BLE_IDENTIFY_DEF(m_identify); // create custom identifying service
+BLE_IDENTIFY_DEF(m_identify); // create custom identifying service instance
 APP_TIMER_DEF(m_battery_timer_id); // setup app timer for battery level reads
-BLE_BAS_DEF(m_bas); // instance of battery level service
+APP_TIMER_DEF(m_local_alert_timer_id);
+BLE_BAS_DEF(m_bas); // instance of Battery Level Wervice
+BLE_TPS_DEF(m_tps); // TX Power Service instance                                 
+BLE_IAS_DEF(m_ias, NRF_SDH_BLE_TOTAL_LINK_COUNT); // Immediate Alert Service instance       
+BLE_LLS_DEF(m_lls); // Link Loss Service instance
 // End Module Instances ////////////////////////////////////////////////////
 
 // BLE globals ////////////////////////////////////////////////////////////////////////
@@ -221,15 +218,38 @@ static ble_uuid_t custom_uuids[] = {{IDENTIFY_UUID_SERVICE, BLE_UUID_TYPE_VENDOR
 
 static uint8_t m_ndef_msg_buf[NDEF_FILE_SIZE];      /**< Buffer for NDEF file. */
 static uint8_t m_ndef_msg_len;                      /**< Length of the NDEF message. */
+static uint8_t color_config[19];
 // End NFC globals ////////////////////////////////////////////////////////////////////
 
 
 static uint16_t battery_percent; // updated by SoC IC, sent through battery service when notifications enabled.
 static uint16_t simulate_battery = 100;
 
-////////////////////////////////// NFC Functions ///////////////////////////////////////////////////////////////
+// NFC Functions ///////////////////////////////////////////////////////////////////////////////////////////////
 
-//  brief Function for updating NDEF message in the flash file.
+/**
+ * @brief Function for updating NDEF message in the flash file.
+ */
+/*static void scheduler_ndef_file_update(void * p_event_data, uint16_t event_size)
+{
+    ret_code_t err_code;
+
+    UNUSED_PARAMETER(p_event_data);
+    UNUSED_PARAMETER(event_size);
+    memcpy(color_config, m_ndef_msg_buf, sizeof(color_config));
+    NRF_LOG_INFO("Contents of ndef message buffer:");
+    for(int i = 0; i < 19; i++){
+        NRF_LOG_INFO("%d at position: %d ", color_config[i], i);
+        NRF_LOG_FLUSH();
+    }
+    
+
+    // Update flash file with new NDEF message.
+    err_code = ndef_file_update(m_ndef_msg_buf, m_ndef_msg_len + NLEN_FIELD_SIZE);
+    APP_ERROR_CHECK(err_code);
+
+    NRF_LOG_INFO("NDEF message updated!");
+}*/
 
 static void scheduler_ndef_file_update(void * p_event_data, uint16_t event_size)
 {
@@ -311,9 +331,10 @@ static void nfc_callback(void          * context,
             {
                 ret_code_t err_code;
 
+                bsp_board_led_on(BSP_BOARD_LED_1);
+
                 // Schedule update of NDEF message in the flash file.
                 m_ndef_msg_len = dataLength;
-                NRF_LOG_INFO("IN NFC NDEF UPDATED EVENT");
                 err_code       = app_sched_event_put(NULL, 0, scheduler_ndef_file_update);
                 APP_ERROR_CHECK(err_code);
             }
@@ -366,6 +387,12 @@ void get_battery_config_settings(uint16_t *capacity, uint16_t *energy, uint16_t 
 
 // BLE Functions ///////////////////////////////////////////////////////////////////////////
 
+// error handler used when services need to pass an error to the application
+static void service_error_handler(uint32_t nrf_error)
+{
+    APP_ERROR_HANDLER(nrf_error);
+}
+
 // error handler for queue writer used in services
 static void nrf_qwr_error_handler(uint32_t nrf_error)
 {
@@ -413,6 +440,121 @@ static void conn_params_init(void)
     err_code = ble_conn_params_init(&conn_params_init);
     APP_ERROR_CHECK(err_code);
 } 
+
+// used to perform actions given one of three alert levels from IAS or LLS.
+static void alert_signal(uint8_t alert_level)
+{
+    ret_code_t err_code;
+
+    switch (alert_level)
+    {
+        case BLE_CHAR_ALERT_LEVEL_NO_ALERT:
+            NRF_LOG_INFO("No Alert.");
+            err_code = bsp_indication_set(BSP_INDICATE_ALERT_OFF);
+            APP_ERROR_CHECK(err_code);
+            break; // BLE_CHAR_ALERT_LEVEL_NO_ALERT
+
+        case BLE_CHAR_ALERT_LEVEL_MILD_ALERT:
+            NRF_LOG_INFO("Mild Alert.");
+            err_code = bsp_indication_set(BSP_INDICATE_ALERT_0);
+            APP_ERROR_CHECK(err_code);
+            break; // BLE_CHAR_ALERT_LEVEL_MILD_ALERT
+
+        case BLE_CHAR_ALERT_LEVEL_HIGH_ALERT:
+            NRF_LOG_INFO("HIGH Alert.");
+            err_code = bsp_indication_set(BSP_INDICATE_ALERT_3);
+            APP_ERROR_CHECK(err_code);
+            break; // BLE_CHAR_ALERT_LEVEL_HIGH_ALERT
+
+        default:
+            // No implementation needed.
+            break;
+    }
+}
+
+/**@brief Function for initializing the TX Power Service.
+ */
+static void tps_init(void)
+{
+    ret_code_t     err_code;
+    ble_tps_init_t tps_init_obj;
+
+    memset(&tps_init_obj, 0, sizeof(tps_init_obj));
+    tps_init_obj.initial_tx_power_level = TX_POWER_LEVEL;
+
+    tps_init_obj.tpl_rd_sec = SEC_OPEN;
+
+    err_code = ble_tps_init(&m_tps, &tps_init_obj);
+    APP_ERROR_CHECK(err_code);
+}
+
+static void on_lls_evt(ble_lls_t * p_lls, ble_lls_evt_t * p_evt)
+{
+    switch (p_evt->evt_type)
+    {
+        case BLE_LLS_EVT_LINK_LOSS_ALERT:
+            alert_signal(p_evt->params.alert_level);
+            break; // BLE_LLS_EVT_LINK_LOSS_ALERT
+
+        default:
+            // No implementation needed.
+            break;
+    }
+}
+
+/**@brief Function for initializing the Link Loss Service.
+ */
+static void lls_init(void)
+{
+    ret_code_t     err_code;
+    ble_lls_init_t lls_init_obj;
+
+    // Initialize Link Loss Service
+    memset(&lls_init_obj, 0, sizeof(lls_init_obj));
+
+    lls_init_obj.evt_handler         = on_lls_evt;
+    lls_init_obj.error_handler       = service_error_handler;
+    lls_init_obj.initial_alert_level = INITIAL_LLS_ALERT_LEVEL;
+
+    lls_init_obj.alert_level_rd_sec = SEC_OPEN;
+    lls_init_obj.alert_level_wr_sec = SEC_OPEN;
+
+    err_code = ble_lls_init(&m_lls, &lls_init_obj);
+    APP_ERROR_CHECK(err_code);
+}
+
+static void on_ias_evt(ble_ias_t * p_ias, ble_ias_evt_t * p_evt)
+{
+    switch (p_evt->evt_type)
+    {
+        case BLE_IAS_EVT_ALERT_LEVEL_UPDATED:
+            if (p_evt->p_link_ctx != NULL)
+            {
+                alert_signal(p_evt->p_link_ctx->alert_level);
+            }
+            break; // BLE_IAS_EVT_ALERT_LEVEL_UPDATED
+
+        default:
+            // No implementation needed.
+            break;
+    }
+}
+
+/**@brief Function for initializing the Immediate Alert Service.
+ */
+static void ias_init(void)
+{
+    ret_code_t     err_code;
+    ble_ias_init_t ias_init_obj;
+
+    memset(&ias_init_obj, 0, sizeof(ias_init_obj));
+    ias_init_obj.evt_handler  = on_ias_evt;
+
+    ias_init_obj.alert_wr_sec = SEC_OPEN;
+
+    err_code = ble_ias_init(&m_ias, &ias_init_obj);
+    APP_ERROR_CHECK(err_code);
+}
 
 // runs when the battery measurement timer expires every BATTERY_LEVEL_MEAS_INTERVAL (ms).
 // if client has notifications enabled for this service it will get update of battery level.
@@ -485,6 +627,250 @@ static void bas_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
+
+//COMMENT OUT OR DELETE
+// Handles distance notifications when iPhone app is put in background mode (locked or app switched)
+static void background_distance_timeout_handler( ){
+    ret_code_t err_code;
+    
+    err_code = ble_identify_background_distance_update(&m_identify, BLE_CONN_HANDLE_ALL);
+    APP_ERROR_CHECK(err_code);
+}
+
+// Plays the speaker
+static void pwm_play(void){
+    (void)nrfx_pwm_simple_playback(&m_pwm0, &seq0, 1, NRFX_PWM_FLAG_LOOP);
+}
+
+// Stop the speaker
+static void pwm_stop(void){
+    (void)nrfx_pwm_simple_playback(&m_pwm0, &seq0, 1, NRFX_PWM_FLAG_STOP);
+}
+
+static void shift_queue_left(){
+    for(int i = 0; i < LOCAL_ALERT_QUEUE_SIZE - 1; i++){
+        local_alert_queue[i] = local_alert_queue[i+1];
+    }
+    local_alert_queue[LOCAL_ALERT_QUEUE_SIZE - 1] = 0;
+}
+
+// priority queue where the only values that are held are odd values. Higher number means higher priority
+// Even priority values serve to clear the odd value that is just below it. Basically acts like a toggle switch
+// for even/odd numbers adjacent to each other.
+static void add_to_queue(uint8_t val){
+    uint8_t prev_max_prio_event = local_alert_queue[0];
+    if(val > prev_max_prio_event){
+        //NRF_LOG_INFO("IN GREATER THAN BLOCK");
+        if((val - prev_max_prio_event == 1) && (val % 2 == 0)){ // if current event is negating highest priority event (like turning off emergency alert)
+            //NRF_LOG_INFO("IN DELETE EVENT SECTION");
+            shift_queue_left();
+            if(local_alert_queue[0] % 2 == 0 && local_alert_queue[0] != 0){ // Next event in queue needs to be cleared
+                NRF_LOG_INFO("MOD BLOCK HIT")
+                shift_queue_left();
+                shift_queue_left();
+            }
+        }
+        else{
+            for(int i = LOCAL_ALERT_QUEUE_SIZE - 1; i > 0; i--){
+                local_alert_queue[i] = local_alert_queue[i-1]; // shift everything down one
+            }
+            local_alert_queue[0] = val; // put highest value on top
+        }
+    }
+    else{
+        for(int i = 1; i < LOCAL_ALERT_QUEUE_SIZE - 1; i--){
+            if(val > local_alert_queue[i]){ // if new value greater than current value
+                for(int j = LOCAL_ALERT_QUEUE_SIZE - 1; j > i; j--){
+                    local_alert_queue[j] = local_alert_queue[j-1]; // shift all down one
+                }
+                local_alert_queue[i] = val; // put new value in current value position
+                //NRF_LOG_INFO("IN LESS THAN BLOCK");
+                break;
+            }
+        }
+    }
+    for(int i = 0; i < LOCAL_ALERT_QUEUE_SIZE; i++){
+                    NRF_LOG_INFO("LOCAL ALERT QUEUE INDEX %d is %d", i, local_alert_queue[i]);
+                    //NRF_LOG_FLUSH();
+                }
+}
+
+// Adds to the local alert priority queue and then responds to the first thing on the queue.
+static void local_alert(uint8_t priority){
+    add_to_queue(priority);
+    uint8_t current_max_priority = local_alert_queue[0];
+    if(current_max_priority == 0){
+        app_timer_stop(m_local_alert_timer_id);
+        if(!nrfx_pwm_is_stopped(&m_pwm0)){
+            pwm_stop();
+        }
+        alerts_started = 0;
+        //return_board_to_normal_state(); // function to reapply proper LED lit
+    }
+    else{
+        if(alerts_started == 0){
+            alerts_started = 1;
+            app_timer_start(m_local_alert_timer_id, LOCAL_ALERT_INTERVAL, NULL);
+        }
+    }
+}
+
+
+static void execute_local_alert(){
+    uint8_t current_max_priority = local_alert_queue[0];
+    switch(current_max_priority){
+        case START_EMERGENCY_ALERT:
+            if(nrfx_pwm_is_stopped(&m_pwm0)){
+                pwm_play();
+            }
+            nrf_gpio_pin_set(MOTOR_OUT);
+            nrf_gpio_pin_set(LED_BLUE);
+            nrf_delay_ms(70);
+            nrf_gpio_pin_clear(LED_BLUE);
+            nrf_gpio_pin_set(LED_YELLOW);
+            nrf_delay_ms(70);
+            nrf_gpio_pin_clear(LED_YELLOW);
+            nrf_gpio_pin_set(LED_RED);
+            nrf_delay_ms(70);
+            nrf_gpio_pin_clear(LED_RED);
+            nrf_gpio_pin_set(LED_GREEN);
+            nrf_delay_ms(70);
+            nrf_gpio_pin_clear(LED_GREEN);
+            nrf_gpio_pin_set(LED_ORANGE);
+            nrf_delay_ms(70);
+            nrf_gpio_pin_clear(LED_ORANGE);
+            nrf_gpio_pin_set(LED_PURPLE);
+            nrf_delay_ms(70);
+            nrf_gpio_pin_clear(LED_PURPLE);
+            nrf_gpio_pin_clear(MOTOR_OUT);
+            nrf_delay_ms(70);
+            break;
+
+        case OUT_OF_RANGE:
+            if(nrfx_pwm_is_stopped(&m_pwm0)){
+                pwm_play();
+            }
+            nrf_gpio_pin_set(MOTOR_OUT);
+            nrf_gpio_pin_set(LED_RED);
+            nrf_delay_ms(200);
+            nrf_gpio_pin_clear(LED_RED);
+            nrf_gpio_pin_clear(MOTOR_OUT);
+            break;
+
+        case BRACELET_REMOVED:
+            if(nrfx_pwm_is_stopped(&m_pwm0)){
+                pwm_play();
+            }
+            nrf_gpio_pin_set(LED_BLUE);
+            nrf_gpio_pin_set(MOTOR_OUT);
+            nrf_delay_ms(200);
+            nrf_gpio_pin_clear(LED_BLUE);
+            nrf_gpio_pin_clear(MOTOR_OUT);
+            nrf_delay_ms(200);
+            break;
+    }
+}
+
+/**
+ * @brief Event handler for Capacitive Sensor High module.
+ *
+ * @param [in] p_evt_type                    Pointer to event data structure.
+ */
+void nrf_csense_handler(nrf_csense_evt_t * p_evt)
+{
+       ret_code_t err_code;
+
+       switch (p_evt->nrf_csense_evt_type)
+       {
+        case NRF_CSENSE_BTN_EVT_PRESSED:
+            NRF_LOG_INFO("Bracelet is on");
+            
+            //err_code = app_timer_stop(m_csense_timer_id); // stop bracelet_removed_flash()
+            //APP_ERROR_CHECK(err_code);
+            
+            //nrf_gpio_pin_set(LED_BLUE);
+            //if(!nrfx_pwm_is_stopped(&m_pwm0)){
+            //    pwm_stop();
+            //}
+            if(alerts_started == 1){ // have to have removed it first before triggering this.
+                local_alert(BRACELET_ON);
+            }
+
+            ble_identify_update(&m_identify, BLE_CONN_HANDLE_ALL, CAPSENSE_BRACELET_ON_NOTIFICATION); // send notification to app
+            break;
+          
+        case NRF_CSENSE_BTN_EVT_RELEASED:
+            //bracelet_removed_flash();
+            NRF_LOG_INFO("BRACELET REMOVED");
+
+            //err_code = app_timer_start(m_csense_timer_id, CSENSE_MEAS_INTERVAL, NULL); // repeat bracelet_removed_flash()
+            //APP_ERROR_CHECK(err_code);
+            local_alert(BRACELET_REMOVED);
+
+            ble_identify_update(&m_identify, BLE_CONN_HANDLE_ALL, CAPSENSE_BRACELET_REMOVED_NOTIFICATION); // send notification to app
+            break;
+        
+        default:
+            NRF_LOG_WARNING("Unknown event.");
+            break;
+    }
+}
+
+/**
+ * @brief Function for starting Capacitive Sensor High module.
+ *
+ * Function enables one slider and one button.
+ */
+static void csense_start(void)
+{
+    ret_code_t err_code;
+    
+    err_code = nrf_csense_init(nrf_csense_handler, APP_TIMER_TICKS_TIMEOUT);
+    APP_ERROR_CHECK(err_code);
+    
+    err_code = nrf_csense_add(&m_button);
+    APP_ERROR_CHECK(err_code);
+}
+
+// Handles bracelet removed behavior, run on app timer in nrf_csense_handler()
+void bracelet_removed_flash()
+{
+     if(nrfx_pwm_is_stopped(&m_pwm0)){
+        pwm_play();
+     }
+     nrf_gpio_pin_set(LED_BLUE);
+     nrf_gpio_pin_set(MOTOR_OUT);
+     nrf_delay_ms(200);
+     nrf_gpio_pin_clear(LED_BLUE);
+     nrf_gpio_pin_clear(MOTOR_OUT);
+     nrf_delay_ms(200);
+}
+
+static void out_of_range_alert(){
+    if(nrfx_pwm_is_stopped(&m_pwm0)){
+        pwm_play();
+    }
+    nrf_gpio_pin_set(MOTOR_OUT);
+    nrf_gpio_pin_set(LED_RED);
+    nrf_delay_ms(200);
+    nrf_gpio_pin_clear(LED_RED);
+    nrf_gpio_pin_clear(MOTOR_OUT);
+}
+
+
+// Handles written values to the custom identify uuid
+static void on_identify_evt(uint8_t event_flag){
+    switch(event_flag){
+        case TRACKING_STARTED:
+            NRF_LOG_INFO("DISTANCE TRACKING STARTED, BEGINNING TOUCH SENSOR MONITORING");
+            csense_start();
+            break;
+        default:
+            local_alert(event_flag);
+            break;
+    }
+}
+
 // Step 9: Init services with queue writer
 static void services_init(void)
 {
@@ -492,10 +878,10 @@ static void services_init(void)
 
     nrf_ble_qwr_init_t qwr_init = {0};
     ble_identify_init_t identify_init;
-    identify_init.evt_handler = ble_identify_on_evt;
 
     qwr_init.error_handler = nrf_qwr_error_handler;
     memset(&identify_init, 0 , sizeof(identify_init));
+    identify_init.evt_handler = on_identify_evt;
     
     err_code = ble_identify_init(&m_identify, &identify_init);
     APP_ERROR_CHECK(err_code);
@@ -504,6 +890,9 @@ static void services_init(void)
     APP_ERROR_CHECK(err_code);
 
     bas_init(); // setting up all bas init objects done in this function
+    tps_init(); // Transmit power service
+    ias_init(); // Immediate alert service
+    lls_init(); // Link loss service
 }
 
 // Advertising handler
@@ -536,15 +925,6 @@ static void advertising_init(void)
     ret_code_t err_code;
     ble_advertising_init_t init;
     memset(&init, 0 , sizeof(init));
-
-    /*ble_advdata_manuf_data_t manuf_data;
-    uint8_t identifier[] = {0x01};
-    manuf_data.company_identifier = 0x0059; // specific to nordic
-    manuf_data.data.p_data = identifier;
-    manuf_data.data.size = sizeof(identifier);
-    NRF_LOG_INFO("Manufacturer data is: %s", manuf_data.data.p_data);
-    init.advdata.p_manuf_specific_data = &manuf_data;*/
-
 
     init.advdata.name_type = BLE_ADVDATA_SHORT_NAME;
     init.advdata.short_name_len = 4;
@@ -602,7 +982,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     switch(p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_DISCONNECTED:
-            NRF_LOG_INFO("Device has been disconnected!");
+            NRF_LOG_INFO("DEVICE DISCONNECTED!!!!!!!!!!!!!!!!!");
             break;
 
         case BLE_GAP_EVT_CONNECTED:
@@ -616,6 +996,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
+            nfc_t4t_emulation_stop(); // disable nfc to minimize interference with ble
             break;
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
@@ -668,31 +1049,10 @@ static void power_management_init(void)
     APP_ERROR_CHECK(err_code);
 }
 
-
-
-void scheduler_touch_sensor_handler(void * p_event_data, uint16_t event_size){
-    UNUSED_PARAMETER(p_event_data);
-    UNUSED_PARAMETER(event_size);
-    
-    //NRF_LOG_INFO("CSENSE HANDLER FUNCTION EXECUTING HERE");
-    bracelet_removed_flash();
-    __WFI();
-    NRF_LOG_FLUSH();
-}
-
-
-
-
-
 // handler for idle power state
 static void idle_state_handle(void)
 {
     app_sched_execute();
-    
-    //addd in Csense stuff here
-    ret_code_t err_code = app_sched_event_put(NULL, 0, scheduler_touch_sensor_handler);
-    APP_ERROR_CHECK(err_code);
-
     if(NRF_LOG_PROCESS() == false)
     {
         nrf_pwr_mgmt_run();
@@ -716,6 +1076,11 @@ static void timers_init(void)
                                 APP_TIMER_MODE_REPEATED,
                                 battery_level_meas_timeout_handler);
     APP_ERROR_CHECK(err_code);
+
+    err_code = app_timer_create(&m_local_alert_timer_id,
+                                APP_TIMER_MODE_REPEATED,
+                                execute_local_alert);
+    APP_ERROR_CHECK(err_code);
 }
 
 // First step, initialize logger
@@ -733,131 +1098,45 @@ static void advertising_start(void)
     APP_ERROR_CHECK(err_code);
 }
 
-
-///////////////////////TOUCH SENSOR FUNCTIONS//////////////////////////////////
-  /**
- * @brief Function for starting the internal LFCLK XTAL oscillator.
- *
- * Note that when using a SoftDevice, LFCLK is always on.
- *
- * @return Values returned by @ref nrf_drv_clock_init.
- */
-static ret_code_t clock_config(void)
+// Change the transmit power to value defined in TX_POWER_LEVEL
+static void tx_power_set(void)
 {
-    ret_code_t err_code;
-    err_code = nrf_drv_clock_init();
-    if (err_code != NRF_SUCCESS)
-    {
-        return err_code;
-    }
-    nrf_drv_clock_lfclk_request(NULL);
-    return NRF_SUCCESS;
+    ret_code_t err_code = sd_ble_gap_tx_power_set(BLE_GAP_TX_POWER_ROLE_ADV, m_advert.adv_handle, TX_POWER_LEVEL);
+    APP_ERROR_CHECK(err_code);
 }
 
-/**
- * @brief Function for handling slider interrupts.
- *
- * @param[in] step                          Detected step.
- */
-//static void slider_handler(uint16_t step)
-//{
-   // static uint16_t slider_val;
-   // if (slider_val != step)
-    //{
-        
-       // NRF_LOG_INFO("Bracelt is on");
-      //  slider_val = step;
-  //  }
-//}
-
-/**
- * @brief Event handler for Capacitive Sensor High module.
- *
- * @param [in] p_evt_type                    Pointer to event data structure.
- */
-void nrf_csense_handler(nrf_csense_evt_t * p_evt)
+///// Local Alert Handler ////////////////////////////////////////////////////////
+static void pwm_common_init(void)//assigning array values
 {
-       
-    switch (p_evt->nrf_csense_evt_type)
+
+   for(int i = 0; i<m_step; i++)
+   {
+     value += step; //1st step:0 +100=100...2nd:100+100=200...so on
+     sequence_values[i]=value;
+     sequence_values[m_step+i] = m_top - value; //sequence_values[100+1] = 1,000 -100=990...so on
+   }
+
+   nrfx_pwm_config_t const config0=
+   {
+    .output_pins=
     {
-        case NRF_CSENSE_BTN_EVT_PRESSED:
-        bracelet_removed = 0;
-        bracelet_initial=0;
-        bsp_board_led_on(LED_BLUE_IDX);
-        NRF_LOG_INFO("Bracelet is on");
-        break;
-          
-        case NRF_CSENSE_BTN_EVT_RELEASED:
-        bracelet_removed = 1;
-        //repeated_timer_handler();
-        bracelet_removed_flash();
-        break;
-                      
-        /*case NRF_CSENSE_SLIDER_EVT_PRESSED:
-        nrf_gpio_pin_set(LED_BLUE);
-        break;
-        case NRF_CSENSE_SLIDER_EVT_RELEASED:
-        break;
-        case NRF_CSENSE_SLIDER_EVT_DRAGGED:
-        if ((p_evt->p_instance == (&m_slider)) && (p_evt->params.slider.step != UINT16_MAX))
-        {
-        /*lint -e611 -save */
-        // ((void(*)(uint16_t, uint8_t))p_evt->p_instance->p_context)(p_evt->params.slider.step, 2);
-        /*lint -restore*/
-        // }
-        // break;
-        default:
-        NRF_LOG_WARNING("Unknown event.");
-        break;
-    }
+       SPEAKER_OUT,
+       NRFX_PWM_PIN_NOT_USED,
+       NRFX_PWM_PIN_NOT_USED,
+     },
+     .irq_priority= APP_IRQ_PRIORITY_LOWEST,
+     .base_clock = NRF_PWM_CLK_2MHz,
+     .count_mode = NRF_PWM_MODE_UP,
+     .top_value = m_top,
+     .load_mode = NRF_PWM_LOAD_COMMON,
+     .step_mode = NRF_PWM_STEP_AUTO
+      };
+
+      APP_ERROR_CHECK(nrfx_pwm_init(&m_pwm0, &config0,NULL));
 }
 
-
-/*
- * Function enables one slider and one button.
+/**@brief Function for application main entry.
  */
-static void csense_start(void){
-    ret_code_t err_code;
-    static uint16_t touched_counter = 0;
-    err_code = nrf_csense_init(nrf_csense_handler, APP_TIMER_TICKS_TIMEOUT);
-    APP_ERROR_CHECK(err_code);
-    nrf_csense_instance_context_set(&m_button, (void*)&touched_counter);
-    //nrf_csense_instance_context_set(&m_slider, (void*)slider_handler);
-    err_code = nrf_csense_add(&m_button);
-    APP_ERROR_CHECK(err_code);
-    //err_code = nrf_csense_add(&m_slider);
-   // APP_ERROR_CHECK(err_code);
-   NRF_LOG_INFO("CSENSE START FUNCTION EXECUTING HERE");
-}
-
-void bracelet_removed_flash(){
-   if(bracelet_removed==1){
-     pwm_play();
-     nrf_gpio_pin_set(LED_BLUE);
-     nrf_gpio_pin_set(MOTOR_OUT);
-     nrf_delay_ms(250);
-     nrf_gpio_pin_clear(LED_BLUE);
-     nrf_gpio_pin_clear(MOTOR_OUT);
-     nrf_delay_ms(250);
-     NRF_LOG_INFO("Bracelet is off");
-   }
-   else{
-     if (bracelet_initial!=2){
-        nrf_gpio_pin_set(LED_BLUE);
-        nrf_gpio_pin_clear(SPEAKER_OUT);
-        return;
-     }
-     else{
-      return;
-     }
-   }
-}
-
-/////////////END OF TOUCH SENSOR FUNCTIONS////////////////////////
-
-
-
-//////////////////MAIN FUNCTION//////////////////////////////////
 int main(void)
 {
     // SoC IC variables ////////////
@@ -875,6 +1154,7 @@ int main(void)
     timers_init();
     leds_init();
     power_management_init();
+    pwm_common_init();
     ///////////////////////////////
 
     // BLE Init ///////////////////
@@ -940,6 +1220,7 @@ int main(void)
     NRF_LOG_INFO("BLE Base Application started!");
 
     advertising_start();
+    tx_power_set();
 
     // NFC Init and Setup /////////////////////////////////////////////////////////////
 
@@ -969,87 +1250,19 @@ int main(void)
     /* Run Read-Write mode for Type 4 Tag platform */
     err_code = nfc_t4t_ndef_rwpayload_set(m_ndef_msg_buf, sizeof(m_ndef_msg_buf));
     APP_ERROR_CHECK(err_code);
+
     NRF_LOG_INFO("Writable NDEF message example started.");
 
     /* Start sensing NFC field */
     err_code = nfc_t4t_emulation_start();
     APP_ERROR_CHECK(err_code);
 
-    /////////////////////// TOUCH SENSOR PART /////////////////////////////////////////
-    //timer_init();
-    //err_code = clock_config();
-    //APP_ERROR_CHECK(err_code);
-    NRF_LOG_INFO("Capacitive sensing library example started.");
-    csense_start();
-
-    //while(1){
-      //bracelet_removed_flash();
-      //__WFI();
-     // NRF_LOG_FLUSH();
-    //}
-
-    //err_code = app_sched_event_put(NULL, 0, scheduler_touch_sensor_handler);
-    //APP_ERROR_CHECK(err_code);
-
-    ////////////////////////////// END TOUCH SENSOR PART //////////////////////////////
-
-    NRF_LOG_INFO("BLAH BLAH BLAH");
-
-    // Once Bluetooth is connected and color properly configured, disable NFC using
-    //nfc_t4t_emulation_stop();
-    //nfc_t4t_done();
-
-   /* while (1)
-    {
-        app_sched_execute();
-
-        NRF_LOG_FLUSH();
-        __WFE();
-    }*/
-
-    bsp_board_led_on(MOTOR_OUT_IDX);
-
+    // zero out the local alert queue
+    memset(local_alert_queue, 0, sizeof(local_alert_queue));
+   
     // Enter main loop.
     for(;;)
     {
         idle_state_handle();
     }
-
-
-    ////////////////////////// Local Alert Config and Setup ////////////////////////////
-    pwm_common_init();
-    bsp_board_init(BSP_INIT_LEDS);
-    pwm_play();
-    NRF_LOG_INFO("PWM application started");
-    nrf_gpio_cfg_output(LED_BLUE); //configures pin as output
-    nrf_gpio_cfg_output(LED_YELLOW);
-    nrf_gpio_cfg_output(LED_RED);
-    nrf_gpio_cfg_output(LED_GREEN);
-    nrf_gpio_cfg_output(LED_ORANGE);
-    nrf_gpio_cfg_output(LED_PURPLE);
-    nrf_gpio_cfg_output(MOTOR_OUT);
-    nrf_gpio_cfg_output(SPEAKER_OUT);
-    /////////////////////// End Local Alert Config and Setup ///////////////////////////
-
-
-    //////////////////// EMERGENCY ALERT PART /////////////////////////////////////////
-    bool emergency_flag = false;
-    int flag_flipper = 0;
-    while(emergency_flag == true){
-      for(int m = 0; m < 1000; m++){
-        if(flag_flipper == 0){
-          err_code = app_sched_event_put(NULL, 0, scheduler_emergency_alert_ON_handler);
-          APP_ERROR_CHECK(err_code);
-          flag_flipper = 1;
-        }
-        else{
-          err_code = app_sched_event_put(NULL, 0, scheduler_emergency_alert_OFF_handler);
-          APP_ERROR_CHECK(err_code);
-          flag_flipper = 0;
-        }
-
-        nrf_delay_ms(750);
-      }
-    }
-    ///////////////////// END EMERGENCY ALERT PART /////////////////////////////////////
 }

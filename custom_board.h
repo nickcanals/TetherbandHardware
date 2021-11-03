@@ -12,48 +12,67 @@ extern "C" {
 // LEDs definitions for Test PCB
 #define LEDS_NUMBER    7
 
+// Pin numbers for the LEDs using the P0 notation. i.e. P013, P014, etc.
 #define LED_START      13
-#define LED_PURPLE     13
-#define LED_YELLOW     14
-#define LED_ORANGE     15
-#define LED_RED        16
-#define LED_BLUE       17
-#define LED_GREEN      18 
+#define LED_RED        13
+#define LED_PURPLE     14
+#define LED_BLUE       15
+#define LED_GREEN      16
+#define LED_ORANGE     17
+#define LED_YELLOW     20 
 #define LED_CHARGE     19
-#define LED_STOP       19
+#define LED_STOP       20
 
-#define LEDS_ACTIVE_STATE 0
+// Indices of the LEDs in the LEDS_LIST array. 
+// Use these for functions that require the index instead of the pin number.
+// i.e. bsp_board_led_on() or bsp_board_led_off() both take the index as the 
+// argument, not the actual pin number.
+#define LED_PURPLE_IDX     0
+#define LED_YELLOW_IDX     1
+#define LED_ORANGE_IDX     2
+#define LED_RED_IDX        3
+#define LED_BLUE_IDX       4
+#define LED_GREEN_IDX      5
+#define LED_CHARGE_IDX     6
+
+// The LEDs on the development kit board use active low operation, or 0, LEDs on a
+// breadboard use active high, or 1.
+#define LEDS_ACTIVE_STATE  1
 
 #define LEDS_INV_MASK  LEDS_MASK
 
+// Used in some Nordic provided functions like bsp_board_leds_init()
 #define LEDS_LIST { LED_PURPLE, LED_YELLOW, LED_ORANGE, LED_RED, LED_BLUE, LED_GREEN, LED_CHARGE }
 
+// Button definitions, only using a power button.
 #define BUTTONS_NUMBER 1
 
 #define BUTTON_START   20
-#define BUTTON_DFU     20
+#define BUTTON_POWER   23
 #define BUTTON_STOP    20
 #define BUTTON_PULL    NRF_GPIO_PIN_PULLUP
 
 #define BUTTONS_ACTIVE_STATE 0
 
-#define BUTTONS_LIST { BUTTON_DFU }
+#define BUTTONS_LIST { BUTTON_POWER }
 
-#define TOUCH_IN    5
-#define SPEAKER_OUT 6
-#define MOTOR_OUT   7
+#define AIN0            0 // Does not refer to P0#, this is actually P02, but the function to
+                          // start up ADC for touch sensor needs the index of available analog inputs
+#define TOUCH_IN    AIN0
+#define SPEAKER_OUT 12
+#define MOTOR_OUT   11
 
 #define BATTERY_SCL 3
 #define BATTERY_SDA 4
 
 // edits end here
-/*
+
 #define RX_PIN_NUMBER  8
 #define TX_PIN_NUMBER  6
 #define CTS_PIN_NUMBER 7
 #define RTS_PIN_NUMBER 5
 #define HWFC           true
-
+/*
 #define SPIS_MISO_PIN   28  // SPI MISO signal.
 #define SPIS_CSN_PIN    12  // SPI CSN signal.
 #define SPIS_MOSI_PIN   25  // SPI MOSI signal.

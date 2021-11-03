@@ -421,7 +421,7 @@
 // <e> BLE_IAS_ENABLED - ble_ias - Immediate Alert Service
 //==========================================================
 #ifndef BLE_IAS_ENABLED
-#define BLE_IAS_ENABLED 0
+#define BLE_IAS_ENABLED 1
 #endif
 // <e> BLE_IAS_CONFIG_LOG_ENABLED - Enables logging in the module.
 //==========================================================
@@ -494,7 +494,7 @@
  
 
 #ifndef BLE_LLS_ENABLED
-#define BLE_LLS_ENABLED 0
+#define BLE_LLS_ENABLED 1
 #endif
 
 // <q> BLE_NUS_C_ENABLED  - ble_nus_c - Nordic UART Central Service
@@ -580,7 +580,7 @@
  
 
 #ifndef BLE_TPS_ENABLED
-#define BLE_TPS_ENABLED 0
+#define BLE_TPS_ENABLED 1
 #endif
 
 // </h> 
@@ -5992,7 +5992,7 @@
  
 
 #ifndef APP_SCHEDULER_WITH_PAUSE
-#define APP_SCHEDULER_WITH_PAUSE 0
+#define APP_SCHEDULER_WITH_PAUSE 1
 #endif
 
 // <q> APP_SCHEDULER_WITH_PROFILER  - Enabling scheduler profiling
@@ -10135,7 +10135,7 @@
 
 // </e>
 
-// <e> NRF_SDH_BLE_LOG_ENABLED - Enable logging in SoftDevice handler (BLE) module.
+// <e> LOG_ENABLED - Enable logging in SoftDevice handler (BLE) module.
 //==========================================================
 #ifndef NRF_SDH_BLE_LOG_ENABLED
 #define NRF_SDH_BLE_LOG_ENABLED 1
@@ -11264,7 +11264,7 @@
 
 // <o> NRF_SDH_BLE_VS_UUID_COUNT - The number of vendor-specific UUIDs. 
 #ifndef NRF_SDH_BLE_VS_UUID_COUNT
-#define NRF_SDH_BLE_VS_UUID_COUNT 2
+#define NRF_SDH_BLE_VS_UUID_COUNT 3
 #endif
 
 // <q> NRF_SDH_BLE_SERVICE_CHANGED  - Include the Service Changed characteristic in the Attribute Table.
