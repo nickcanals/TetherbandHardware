@@ -10,10 +10,9 @@
 
 // battery configuration parameters
 #define DESIGN_CAPACITY 0x01F4 // 500 mAh
-#define DESIGN_ENERGY 0x073A // 1850 - equal to Design Capacity*3.7 per TI reference docs
+#define DESIGN_ENERGY 0x073A // 1850 mWh - equal to Design Capacity*3.7 per TI reference docs
 #define TERMINATE_VOLTAGE 0x0BEA // 3050mV - battery has automatic circuit to shutdown at 3V, this makes sure some power is left to do shutdown of the micro.
-
-//#define TAPER_RATE 5/2 - Taper current is defined by the charger we are using (mAh value at which the charger considers the battery to be full)
+#define TAPER_RATE 0x214 // 532  = Design Capacity/(0.1 * Terminate Current) Terminate current found to be 7.5-9.4 mA based on charging IC docs
 
 // Gauge extended commands - used with gauge_cmd_read() or gauge_cmd_write()
 #define GET_DESIGN_CAPACITY 0X3C // return currently configured design capacity - use for debug
@@ -23,6 +22,7 @@
 #define GET_FLAGS 0x06 // return the current contents of the flags register
 #define GET_OP_CONFIG 0x3A // return the current contents of the opconfig register
 #define GET_BATT_PCT 0x1C
+#define GET_VOLTAGE 0x04
 
 // Control subcommands - used with gauge_control()
 #define UNSEAL 0x8000 // unseals the IC so memory can be modified (i.e. for setting config values)
@@ -67,6 +67,8 @@ bool check_status(uint16_t current_status, uint8_t bit_index);
 void shift_register(char * pData, uint8_t length);
 
 void unseal_gauge();
+
+uint8_t get_battery_pct();
 
 void set_starting_config();
 

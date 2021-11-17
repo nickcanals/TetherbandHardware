@@ -244,7 +244,16 @@ ret_code_t ndef_file_load(uint8_t * p_buff, uint32_t size)
     fds_find_token_t   ftok;
     fds_flash_record_t flash_record;
 
-    // Always clear token before running new file/record search.
+    NRF_LOG_INFO("LOADING DEFAULT NFC VALUES INTO FLASH", err_code);
+
+    // Create default NDEF message.
+    err_code = ndef_file_default_message(p_buff, &size);
+    VERIFY_SUCCESS(err_code);
+
+    // Create record with default NDEF message.
+    err_code = ndef_file_create(p_buff, size);
+
+    /*// Always clear token before running new file/record search.
     memset(&ftok, 0x00, sizeof(fds_find_token_t));
 
     // Search for NDEF message in FLASH.
@@ -284,7 +293,7 @@ ret_code_t ndef_file_load(uint8_t * p_buff, uint32_t size)
 
         // Create record with default NDEF message.
         err_code = ndef_file_create(p_buff, size);
-    }
+    }*/
 
     return err_code;
 }

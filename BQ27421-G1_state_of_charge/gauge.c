@@ -354,6 +354,16 @@ void set_starting_config(){
         NRF_LOG_FLUSH();
     }
 
+    update_status = update_config_parameter(NULL, TAPER_RATE, TAPER_RATE_OFFSET, OFFSET_0, STATE_SUB, STATE_SUB_LEN);
+    if(!update_status){
+        NRF_LOG_INFO("Failed to update Taper Rate.");
+        NRF_LOG_FLUSH();
+    }
+    else{
+        NRF_LOG_INFO("Taper Rate successfully updated.");
+        NRF_LOG_FLUSH();
+    }
+
     if(!gauge_exit(NULL, EXIT_CFG_UPDATE)){// exit update config mode. This automatically reseals data memory.
         NRF_LOG_INFO("Failed to exit config update mode in set_starting_config()");
         return;
@@ -395,6 +405,17 @@ void print_register_status(uint16_t current_status, uint16_t register_command)
             NRF_LOG_FLUSH();
             return;
     }
+}
+
+uint8_t get_battery_pct(){
+    uint16_t percent;
+    uint16_t int_pct;
+    uint16_t current_voltage;
+
+    current_voltage = gauge_cmd_read(NULL, GET_VOLTAGE);
+    
+    percent = (uint16_t)(((current_voltage-TERMINATE_VOLTAGE)/(4200.0 - TERMINATE_VOLTAGE))*100);
+    return percent;
 }
 
 void unseal_gauge(){

@@ -80,6 +80,7 @@
 // BLE Includes///////////////
 #include "app_timer.h"
 #include "bsp_btn_ble.h"
+#include "bsp_nfc.h"
 #include "nrf_pwr_mgmt.h"
 #include "nrf_sdh.h"
 #include "nrf_sdh_ble.h"
@@ -107,6 +108,9 @@
 #include "nrf_drv_timer.h"
 /////////////////////////////
 
+#include "nrf_drv_gpiote.h" // for power button
+
+
 //PWM and Touch Sensor Parameters ////////////////////////////////////////////////////
 #define m_top 1000
 #define m_step 100
@@ -133,6 +137,7 @@ void bracelet_removed_flash();
 void repeated_timer_handler();
 uint8_t bracelet_removed = 0;
 uint8_t bracelet_initial = 2;
+static bool csense_started = false;
 
 nrf_pwm_sequence_t const seq0=
 {
@@ -175,17 +180,23 @@ static uint8_t alerts_started = 0; // flag to know if alerts are started
 #define LOCAL_ALERT_INTERVAL            APP_TIMER_TICKS(500)
 
 #define INITIAL_LLS_ALERT_LEVEL         BLE_CHAR_ALERT_LEVEL_NO_ALERT // For link loss service     
-#define TX_POWER_LEVEL                  (-8) // Sets the radio transmit power and is the value sent in TX power service used in distance determination.                                    
+#define TX_POWER_LEVEL                  (-4) // Sets the radio transmit power and is the value sent in TX power service used in distance determination.                                    
 // End BLE Defines //////////////////////////////////////////////////////////
 
 
 // App Scheduler Defines and NFC Defines ////////////////////////////////////
 #define BLE_BAS_SCHED_EVENT_DATA_SIZE sizeof(ble_bas_evt_t)
-#define APP_SCHED_MAX_EVENT_SIZE MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE, BLE_BAS_SCHED_EVENT_DATA_SIZE) /**< Maximum size of scheduler events. */
-#define APP_SCHED_QUEUE_SIZE     20                  /**< Maximum number of events in the scheduler queue. */
-#define APP_DEFAULT_BTN          BSP_BOARD_BUTTON_0 /**< Button used to set default NDEF message. */
+#define EVENT_GROUP_1 MAX(APP_TIMER_SCHED_EVENT_DATA_SIZE, BLE_BAS_SCHED_EVENT_DATA_SIZE) // MAX macro only takes two arguments, so had to be done this way
+#define EVENT_GROUP_2 MAX(sizeof(nrf_csense_evt_t), sizeof(nrf_pwr_mgmt_evt_t))
+#define APP_SCHED_MAX_EVENT_SIZE MAX(EVENT_GROUP_1, EVENT_GROUP_2) /**< Maximum size of scheduler events. */
+#define APP_SCHED_QUEUE_SIZE     30                  /**< Maximum number of events in the scheduler queue. */
+//#define APP_DEFAULT_BTN          BSP_BOARD_BUTTON_0 /**< Button used to set default NDEF message. */
 // End NFC Defines //////////////////////////////////////////////////////////
 
+
+// Index of the power button, used with bsp button functions
+#define BTN_ID_WAKEUP 0
+#define BTN_ID_SLEEP  0 
 
 // Module Instances /////////////////////////////////////////////////////////
 
@@ -219,37 +230,45 @@ static ble_uuid_t custom_uuids[] = {{IDENTIFY_UUID_SERVICE, BLE_UUID_TYPE_VENDOR
 static uint8_t m_ndef_msg_buf[NDEF_FILE_SIZE];      /**< Buffer for NDEF file. */
 static uint8_t m_ndef_msg_len;                      /**< Length of the NDEF message. */
 static uint8_t color_config[19];
+static bool nfc_stopped;
+static char team_color;
+static uint32_t team_color_index;
 // End NFC globals ////////////////////////////////////////////////////////////////////
 
 
-static uint16_t battery_percent; // updated by SoC IC, sent through battery service when notifications enabled.
+static uint8_t battery_percent; // updated by SoC IC, sent through battery service when notifications enabled.
+static uint8_t last_batt_percent;
 static uint16_t simulate_battery = 100;
 
 // NFC Functions ///////////////////////////////////////////////////////////////////////////////////////////////
 
-/**
- * @brief Function for updating NDEF message in the flash file.
- */
-/*static void scheduler_ndef_file_update(void * p_event_data, uint16_t event_size)
+bool shutdown_handler(nrf_pwr_mgmt_evt_t event)
 {
-    ret_code_t err_code;
+    uint32_t err_code;
 
-    UNUSED_PARAMETER(p_event_data);
-    UNUSED_PARAMETER(event_size);
-    memcpy(color_config, m_ndef_msg_buf, sizeof(color_config));
-    NRF_LOG_INFO("Contents of ndef message buffer:");
-    for(int i = 0; i < 19; i++){
-        NRF_LOG_INFO("%d at position: %d ", color_config[i], i);
-        NRF_LOG_FLUSH();
+    switch (event)
+    {
+        case NRF_PWR_MGMT_EVT_PREPARE_SYSOFF: // TO BE TRIGGERED WHEN BATTERY SUPER LOW
+            NRF_LOG_INFO("NRF_PWR_MGMT_EVT_PREPARE_SYSOFF");
+            err_code = bsp_buttons_disable();
+            APP_ERROR_CHECK(err_code);
+            break;
+
+        case NRF_PWR_MGMT_EVT_PREPARE_WAKEUP:
+           // NRF_LOG_INFO("NRF_PWR_MGMT_EVT_PREPARE_WAKEUP");
+            err_code = bsp_buttons_disable();
+            // Suppress NRF_ERROR_NOT_SUPPORTED return code.
+            UNUSED_VARIABLE(err_code);
+
+            err_code = bsp_nfc_sleep_mode_prepare();
+            // Suppress NRF_ERROR_NOT_SUPPORTED return code.
+            UNUSED_VARIABLE(err_code);
+            break;
     }
-    
+    return true;
+}
 
-    // Update flash file with new NDEF message.
-    err_code = ndef_file_update(m_ndef_msg_buf, m_ndef_msg_len + NLEN_FIELD_SIZE);
-    APP_ERROR_CHECK(err_code);
-
-    NRF_LOG_INFO("NDEF message updated!");
-}*/
+NRF_PWR_MGMT_HANDLER_REGISTER(shutdown_handler, 0);
 
 static void scheduler_ndef_file_update(void * p_event_data, uint16_t event_size)
 {
@@ -265,35 +284,40 @@ static void scheduler_ndef_file_update(void * p_event_data, uint16_t event_size)
     for(int i = 11; i < 17; i++){
         NRF_LOG_INFO("HERE: %c", m_ndef_msg_buf[i]);
     }
-    
+    team_color = (char*)m_ndef_msg_buf[11]; 
 
-    if((char*)m_ndef_msg_buf[11] == 'o'){
-        bsp_board_led_on(LED_ORANGE_IDX);
-        NRF_LOG_INFO("Color Sent Over NFC Is: Orange");
-    }
-    else if((char*)m_ndef_msg_buf[11] == 'p'){
-        bsp_board_led_on(LED_PURPLE_IDX);
-        NRF_LOG_INFO("Color Sent Over NFC Is: Purple");
-    }
-    else if((char*)m_ndef_msg_buf[11] == 'y'){
-        bsp_board_led_on(LED_YELLOW_IDX);
-        NRF_LOG_INFO("Color Sent Over NFC Is: Yellow");
-    }
-    else if((char*)m_ndef_msg_buf[11] == 'r'){
-        bsp_board_led_on(LED_RED_IDX);
-        NRF_LOG_INFO("Color Sent Over NFC Is: Red");
-    }
-    else if((char*)m_ndef_msg_buf[11] == 'b'){
-        bsp_board_led_on(LED_BLUE_IDX);
-        NRF_LOG_INFO("Color Sent Over NFC Is: Blue");
-    }
-    else{
-        bsp_board_led_on(LED_GREEN_IDX);
-        NRF_LOG_INFO("Color Sent Over NFC Is: Green");
-    }
+    switch(team_color){
+        case 'o':
+            team_color_index = LED_ORANGE_IDX;
+            NRF_LOG_INFO("Color Sent Over NFC Is: Orange");
+            break;
+        
+        case 'p':
+            team_color_index = LED_PURPLE_IDX;
+            NRF_LOG_INFO("Color Sent Over NFC Is: Purple");
+            break;
 
+        case 'r':
+            team_color_index = LED_RED_IDX;
+            NRF_LOG_INFO("Color Sent Over NFC Is: Red");
+            break;
 
-    NRF_LOG_INFO("NDEF message updated!");
+        case 'y':
+            team_color_index = LED_YELLOW_IDX;
+            NRF_LOG_INFO("Color Sent Over NFC Is: Yellow");
+            break;
+        
+        case 'b':
+            team_color_index = LED_BLUE_IDX;
+            NRF_LOG_INFO("Color Sent Over NFC Is: Blue");
+            break;
+
+        case 'g':
+            team_color_index = LED_GREEN_IDX;
+            NRF_LOG_INFO("Color Sent Over NFC Is: Green");
+            break;
+    }
+    bsp_board_led_on(team_color_index);
 }
 
 
@@ -311,17 +335,14 @@ static void nfc_callback(void          * context,
     switch (event)
     {
         case NFC_T4T_EVENT_FIELD_ON:
-            bsp_board_led_on(BSP_BOARD_LED_0);
             NRF_LOG_INFO("EVENT: NFC T4T EVENT FIELD ON TRIGGERED");
             break;
 
         case NFC_T4T_EVENT_FIELD_OFF:
-            //bsp_board_leds_off();
             NRF_LOG_INFO("EVENT: NFC_T4T_EVENT_FIELD_OFF TRIGGERED");
             break;
 
-        case NFC_T4T_EVENT_NDEF_READ:
-            bsp_board_led_on(BSP_BOARD_LED_3);
+        case NFC_T4T_EVENT_NDEF_READ:;
             NRF_LOG_INFO("EVENT: NFC_T4T_EVENT_NDEF_READ TRIGGERED");
             break;
 
@@ -330,8 +351,6 @@ static void nfc_callback(void          * context,
             if (dataLength > 0)
             {
                 ret_code_t err_code;
-
-                bsp_board_led_on(BSP_BOARD_LED_1);
 
                 // Schedule update of NDEF message in the flash file.
                 m_ndef_msg_len = dataLength;
@@ -343,6 +362,28 @@ static void nfc_callback(void          * context,
         default:
             break;
     }
+}
+
+static void nfc_default_config(){
+    ret_code_t err_code;
+    
+    err_code = ndef_file_load(m_ndef_msg_buf, sizeof(m_ndef_msg_buf));
+    APP_ERROR_CHECK(err_code);
+
+    /* Set up NFC */
+    err_code = nfc_t4t_setup(nfc_callback, NULL);
+    APP_ERROR_CHECK(err_code);
+
+    /* Run Read-Write mode for Type 4 Tag platform */
+    err_code = nfc_t4t_ndef_rwpayload_set(m_ndef_msg_buf, sizeof(m_ndef_msg_buf));
+    APP_ERROR_CHECK(err_code);
+    NRF_LOG_INFO("DEFAULT NFC VALUES SET");
+
+    /* Start sensing NFC field */
+    err_code = nfc_t4t_emulation_start();
+    APP_ERROR_CHECK(err_code);
+
+    nfc_stopped = false; // flag used to disable/enable nfc when phone disconnected or tracking started
 }
 // End NFC Functions //////////////////////////////////////////////////////////////////////////////////////////
 
@@ -562,21 +603,24 @@ static void battery_level_meas_timeout_handler(void * p_context)
 {
     UNUSED_PARAMETER(p_context);
     // REMOVE THIS AFTER TESTING WITH SOC IC AND BATTERY CONNECTED 
-    if(simulate_battery != 0){
+    /*if(simulate_battery != 0){
         simulate_battery -= 1;
-    }
+    }*/
     //NRF_LOG_INFO("SIMULATE BATTERY LEVEL = %d", simulate_battery);
     
-    uint8_t percentage_batt_lvl = simulate_battery;
+    //uint8_t percentage_batt_lvl = simulate_battery;
     
-    /*battery_percent = gauge_cmd_read(NULL, GET_BATT_PCT);
+    battery_percent = get_battery_pct();
     NRF_LOG_INFO("Battery percent successfully read at %d%", battery_percent);
-    NRF_LOG_FLUSH();*/
+    NRF_LOG_FLUSH();
 
     ret_code_t err_code;
-    //err_code = ble_bas_battery_level_update(&m_bas, (uint8_t)battery_percent, BLE_CONN_HANDLE_ALL);
-    err_code = ble_bas_battery_level_update(&m_bas, percentage_batt_lvl, BLE_CONN_HANDLE_ALL);
-    APP_ERROR_CHECK(err_code);
+    if(battery_percent != last_batt_percent){
+        NRF_LOG_INFO("BATTERY LEVEL CHANGED, UPDATING VALUE.");
+        err_code = ble_bas_battery_level_update(&m_bas, battery_percent, BLE_CONN_HANDLE_ALL);
+        APP_ERROR_CHECK(err_code);
+    }
+    last_batt_percent = battery_percent; // save value for next battery update
 }
 
 // battery service handler
@@ -589,6 +633,7 @@ static void on_bas_evt(ble_bas_t * p_bas, ble_bas_evt_t * p_evt)
         case BLE_BAS_EVT_NOTIFICATION_ENABLED:
             // Start battery timer
             NRF_LOG_INFO("Notification Enabled event received");
+            battery_level_meas_timeout_handler(NULL);
             err_code = app_timer_start(m_battery_timer_id, BATTERY_LEVEL_MEAS_INTERVAL, NULL);
             APP_ERROR_CHECK(err_code);
             break; // BLE_BAS_EVT_NOTIFICATION_ENABLED
@@ -660,9 +705,7 @@ static void shift_queue_left(){
 static void add_to_queue(uint8_t val){
     uint8_t prev_max_prio_event = local_alert_queue[0];
     if(val > prev_max_prio_event){
-        //NRF_LOG_INFO("IN GREATER THAN BLOCK");
         if((val - prev_max_prio_event == 1) && (val % 2 == 0)){ // if current event is negating highest priority event (like turning off emergency alert)
-            //NRF_LOG_INFO("IN DELETE EVENT SECTION");
             shift_queue_left();
             if(local_alert_queue[0] % 2 == 0 && local_alert_queue[0] != 0){ // Next event in queue needs to be cleared
                 NRF_LOG_INFO("MOD BLOCK HIT")
@@ -684,15 +727,14 @@ static void add_to_queue(uint8_t val){
                     local_alert_queue[j] = local_alert_queue[j-1]; // shift all down one
                 }
                 local_alert_queue[i] = val; // put new value in current value position
-                //NRF_LOG_INFO("IN LESS THAN BLOCK");
                 break;
             }
         }
     }
-    for(int i = 0; i < LOCAL_ALERT_QUEUE_SIZE; i++){
+    /*for(int i = 0; i < LOCAL_ALERT_QUEUE_SIZE; i++){
                     NRF_LOG_INFO("LOCAL ALERT QUEUE INDEX %d is %d", i, local_alert_queue[i]);
                     //NRF_LOG_FLUSH();
-                }
+                }*/
 }
 
 // Adds to the local alert priority queue and then responds to the first thing on the queue.
@@ -705,11 +747,13 @@ static void local_alert(uint8_t priority){
             pwm_stop();
         }
         alerts_started = 0;
-        //return_board_to_normal_state(); // function to reapply proper LED lit
+        bsp_board_led_on(team_color_index); // turn team color back on
     }
     else{
         if(alerts_started == 0){
             alerts_started = 1;
+            bsp_board_led_off(team_color_index); // turn off team color before starting alerts.
+            NRF_LOG_INFO("in alerts started block");
             app_timer_start(m_local_alert_timer_id, LOCAL_ALERT_INTERVAL, NULL);
         }
     }
@@ -719,7 +763,14 @@ static void local_alert(uint8_t priority){
 static void execute_local_alert(){
     uint8_t current_max_priority = local_alert_queue[0];
     switch(current_max_priority){
-        case START_EMERGENCY_ALERT:
+        case POWER_OFF:
+            NRF_LOG_INFO("GOING INTO SYSTEM OFF MODE");
+            NRF_LOG_FLUSH();
+            app_timer_stop_all();
+            nrf_pwr_mgmt_shutdown(NRF_PWR_MGMT_SHUTDOWN_GOTO_SYSOFF);
+            break;
+        
+        case START_EMERGENCY_ALERT:           
             if(nrfx_pwm_is_stopped(&m_pwm0)){
                 pwm_play();
             }
@@ -762,10 +813,8 @@ static void execute_local_alert(){
                 pwm_play();
             }
             nrf_gpio_pin_set(LED_BLUE);
-            nrf_gpio_pin_set(MOTOR_OUT);
             nrf_delay_ms(200);
             nrf_gpio_pin_clear(LED_BLUE);
-            nrf_gpio_pin_clear(MOTOR_OUT);
             nrf_delay_ms(200);
             break;
     }
@@ -785,13 +834,6 @@ void nrf_csense_handler(nrf_csense_evt_t * p_evt)
         case NRF_CSENSE_BTN_EVT_PRESSED:
             NRF_LOG_INFO("Bracelet is on");
             
-            //err_code = app_timer_stop(m_csense_timer_id); // stop bracelet_removed_flash()
-            //APP_ERROR_CHECK(err_code);
-            
-            //nrf_gpio_pin_set(LED_BLUE);
-            //if(!nrfx_pwm_is_stopped(&m_pwm0)){
-            //    pwm_stop();
-            //}
             if(alerts_started == 1){ // have to have removed it first before triggering this.
                 local_alert(BRACELET_ON);
             }
@@ -800,11 +842,8 @@ void nrf_csense_handler(nrf_csense_evt_t * p_evt)
             break;
           
         case NRF_CSENSE_BTN_EVT_RELEASED:
-            //bracelet_removed_flash();
-            NRF_LOG_INFO("BRACELET REMOVED");
 
-            //err_code = app_timer_start(m_csense_timer_id, CSENSE_MEAS_INTERVAL, NULL); // repeat bracelet_removed_flash()
-            //APP_ERROR_CHECK(err_code);
+            NRF_LOG_INFO("BRACELET REMOVED");
             local_alert(BRACELET_REMOVED);
 
             ble_identify_update(&m_identify, BLE_CONN_HANDLE_ALL, CAPSENSE_BRACELET_REMOVED_NOTIFICATION); // send notification to app
@@ -830,40 +869,22 @@ static void csense_start(void)
     
     err_code = nrf_csense_add(&m_button);
     APP_ERROR_CHECK(err_code);
-}
 
-// Handles bracelet removed behavior, run on app timer in nrf_csense_handler()
-void bracelet_removed_flash()
-{
-     if(nrfx_pwm_is_stopped(&m_pwm0)){
-        pwm_play();
-     }
-     nrf_gpio_pin_set(LED_BLUE);
-     nrf_gpio_pin_set(MOTOR_OUT);
-     nrf_delay_ms(200);
-     nrf_gpio_pin_clear(LED_BLUE);
-     nrf_gpio_pin_clear(MOTOR_OUT);
-     nrf_delay_ms(200);
+    csense_started = true;
 }
-
-static void out_of_range_alert(){
-    if(nrfx_pwm_is_stopped(&m_pwm0)){
-        pwm_play();
-    }
-    nrf_gpio_pin_set(MOTOR_OUT);
-    nrf_gpio_pin_set(LED_RED);
-    nrf_delay_ms(200);
-    nrf_gpio_pin_clear(LED_RED);
-    nrf_gpio_pin_clear(MOTOR_OUT);
-}
-
 
 // Handles written values to the custom identify uuid
 static void on_identify_evt(uint8_t event_flag){
     switch(event_flag){
         case TRACKING_STARTED:
+            if(!nfc_stopped){
+                nfc_t4t_emulation_stop(); // disable nfc to minimize interference with ble
+                nfc_stopped = true;
+            }
             NRF_LOG_INFO("DISTANCE TRACKING STARTED, BEGINNING TOUCH SENSOR MONITORING");
-            csense_start();
+            if(!csense_started){
+                csense_start();
+            }
             break;
         default:
             local_alert(event_flag);
@@ -982,11 +1003,16 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
     switch(p_ble_evt->header.evt_id)
     {
         case BLE_GAP_EVT_DISCONNECTED:
+            nrf_gpio_pin_set(LED_BLUE);
+            if(nfc_stopped){
+                nfc_default_config(); // set up nfc field again if it was turned off during distance tracking
+            }
             NRF_LOG_INFO("DEVICE DISCONNECTED!!!!!!!!!!!!!!!!!");
             break;
 
         case BLE_GAP_EVT_CONNECTED:
             NRF_LOG_INFO("Device has been connected!");
+            nrf_gpio_pin_clear(LED_BLUE);
       
             // light corresponding leds on board
             err_code = bsp_indication_set(BSP_INDICATE_CONNECTED);
@@ -996,7 +1022,6 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             m_conn_handle = p_ble_evt->evt.gap_evt.conn_handle;
             err_code = nrf_ble_qwr_conn_handle_assign(&m_qwr, m_conn_handle);
             APP_ERROR_CHECK(err_code);
-            nfc_t4t_emulation_stop(); // disable nfc to minimize interference with ble
             break;
 
         case BLE_GAP_EVT_PHY_UPDATE_REQUEST:
@@ -1013,7 +1038,7 @@ static void ble_evt_handler(ble_evt_t const * p_ble_evt, void * p_context)
             break;
 
         case BLE_GATTS_EVT_WRITE:
-            NRF_LOG_INFO("IN EVENT WRITE CASE IN MAIN");
+           // NRF_LOG_INFO("IN EVENT WRITE CASE IN MAIN");
             ble_identify_on_evt(&m_identify, p_ble_evt);
             break;
 
@@ -1146,6 +1171,7 @@ int main(void)
     uint16_t config_capacity;
     uint16_t config_energy; 
     uint16_t config_term_voltage;
+    uint16_t config_taper_rate;
     ////////////////////////////////
 
     // System Init ////////////////
@@ -1155,6 +1181,8 @@ int main(void)
     leds_init();
     power_management_init();
     pwm_common_init();
+    bsp_button_config();
+    nrf_gpio_cfg_output(MOTOR_OUT);
     ///////////////////////////////
 
     // BLE Init ///////////////////
@@ -1167,7 +1195,7 @@ int main(void)
     ///////////////////////////////
     
     // SoC IC Init and Config setup /////////////////////////////////////////////////////
-    /*twi_init(); 
+    twi_init(); 
 
     NRF_LOG_INFO("All Init functions completed. Application Started.");
     NRF_LOG_INFO("Setting battery config parameters.");
@@ -1199,67 +1227,40 @@ int main(void)
     uint8_t copy_array[2];
     copy_array[0] = state_buffer[DESIGN_EGY_OFFSET + 1];
     copy_array[1] = state_buffer[DESIGN_EGY_OFFSET];
-    memcpy(&config_energy, copy_array,  sizeof(config_energy));
+    memcpy(&config_energy, copy_array, sizeof(config_energy));
     
     copy_array[0] = state_buffer[TERM_VOLT_OFFSET + 1];
     copy_array[1] = state_buffer[TERM_VOLT_OFFSET];
-    memcpy(&config_term_voltage, copy_array,  sizeof(config_term_voltage));
+    memcpy(&config_term_voltage, copy_array, sizeof(config_term_voltage));
+
+    copy_array[0] = state_buffer[TAPER_RATE_OFFSET + 1];
+    copy_array[1] = state_buffer[TAPER_RATE_OFFSET];
+    memcpy(&config_taper_rate, copy_array, sizeof(config_taper_rate));
     
     gauge_control(NULL, SEAL, 0);
     // Done reading out the new values
 
-    NRF_LOG_INFO("New config parameters:\nDesign Capacity: %d mAh\nDesign Energy: %d\nTerminate Voltage: %d mV", 
-                  config_capacity, config_energy, config_term_voltage);
+    NRF_LOG_INFO("New config parameters:\nDesign Capacity: %d mAh\nDesign Energy: %d\nTerminate Voltage: %d mV\nTaper Rate: %d", 
+                  config_capacity, config_energy, config_term_voltage, config_taper_rate);
     NRF_LOG_FLUSH();
-
-    battery_percent = gauge_cmd_read(NULL, GET_BATT_PCT);
-    NRF_LOG_INFO("Battery percent successfully read at %d%", battery_percent);
-    NRF_LOG_FLUSH();*/
     ///// End SoC Init and Config setup ////////////////////////////////////////////////
 
-    NRF_LOG_INFO("BLE Base Application started!");
-
-    advertising_start();
-    tx_power_set();
-
     // NFC Init and Setup /////////////////////////////////////////////////////////////
-
-    /* Initialize FDS. */
     err_code = ndef_file_setup();
     APP_ERROR_CHECK(err_code);
 
-    /* Load NDEF message from the flash file. */
-    err_code = ndef_file_load(m_ndef_msg_buf, sizeof(m_ndef_msg_buf));
-    APP_ERROR_CHECK(err_code);
-
-    // Restore default NDEF message.
-    if (bsp_board_button_state_get(APP_DEFAULT_BTN))
-    {
-        uint32_t size = sizeof(m_ndef_msg_buf);
-        err_code = ndef_file_default_message(m_ndef_msg_buf, &size);
-        APP_ERROR_CHECK(err_code);
-        err_code = ndef_file_update(m_ndef_msg_buf, NDEF_FILE_SIZE);
-        APP_ERROR_CHECK(err_code);
-        NRF_LOG_DEBUG("Default NDEF message restored!");
-    }
-
-    /* Set up NFC */
-    err_code = nfc_t4t_setup(nfc_callback, NULL);
-    APP_ERROR_CHECK(err_code);
-
-    /* Run Read-Write mode for Type 4 Tag platform */
-    err_code = nfc_t4t_ndef_rwpayload_set(m_ndef_msg_buf, sizeof(m_ndef_msg_buf));
-    APP_ERROR_CHECK(err_code);
-
-    NRF_LOG_INFO("Writable NDEF message example started.");
-
-    /* Start sensing NFC field */
-    err_code = nfc_t4t_emulation_start();
-    APP_ERROR_CHECK(err_code);
+    nfc_default_config();
+    ///// End NFC Init and Config setup ////////////////////////////////////////////////
 
     // zero out the local alert queue
     memset(local_alert_queue, 0, sizeof(local_alert_queue));
-   
+
+    advertising_start();
+    tx_power_set();
+    NRF_LOG_INFO("BLE Base Application started!");
+
+    nrf_gpio_pin_set(LED_BLUE);
+
     // Enter main loop.
     for(;;)
     {

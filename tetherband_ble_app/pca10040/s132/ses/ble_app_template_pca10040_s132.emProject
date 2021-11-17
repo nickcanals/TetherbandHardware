@@ -128,6 +128,7 @@
         <file file_name="../../../../../../components/ble/peer_manager/security_manager.c" />
         <file file_name="../../../../../../components/ble/ble_link_ctx_manager/ble_link_ctx_manager.c" />
       </folder>
+      <file file_name="../../../../../../components/libraries/bsp/bsp_nfc.c" />
     </folder>
     <folder Name="Application">
       <file file_name="../../../main.c" />
